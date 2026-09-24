@@ -48,7 +48,7 @@ src/
   components/            Board, eval bar, analysis panel, setup panel, …
   types/chess.ts         Shared domain + engine types
 tests/                   Vitest: engine protocol (fake worker), grading, review
-scripts/copy-stockfish.mjs  Copies the WASM engine from node_modules → public/
+scripts/copy-stockfish.mjs  Copies the WASM engine and its GPL-3.0 license → public/
 ```
 
 Engine asset paths are `import.meta.env.BASE_URL`-aware, so the app builds
