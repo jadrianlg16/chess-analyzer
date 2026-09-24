@@ -7,7 +7,8 @@ import { ChessBoard, type BoardArrow } from "./components/ChessBoard";
 import { EvalBar } from "./components/EvalBar";
 import { GameNavBar } from "./components/GameNavBar";
 import { GameStatusBanner, type GameStatus } from "./components/GameStatusBanner";
-import { MovePanel, type GameAnalysisSummary } from "./components/MovePanel";
+import type { EvalPoint } from "./components/EvalGraph";
+import { MovePanel, type ReviewView } from "./components/MovePanel";
 import { PromotionOverlay } from "./components/PromotionOverlay";
 import { SetupPanel, type PaletteSelection } from "./components/SetupPanel";
 import {
@@ -44,9 +45,16 @@ import {
   treeFromPgn,
   type GameTree
 } from "./lib/gameTree";
-import { evaluateFens } from "./lib/gameAnalysis";
-import { scoreToWhitePerspective } from "./lib/evaluation";
-import { classifyByLoss, NAG_BY_QUALITY } from "./lib/nags";
+import { evaluatePositions, REVIEW_PRESETS, type ReviewPreset } from "./lib/gameAnalysis";
+import { nagForJudgement } from "./lib/nags";
+import {
+  buildReview,
+  judgeMove,
+  povValue,
+  winPercent,
+  type GameReview,
+  type PositionEval
+} from "./lib/review";
 import { cueForMove, playSound } from "./lib/sound";
 import {
   normalizeBoardTheme,
@@ -89,10 +97,20 @@ function buildPgn(tree: GameTree): string {
   }
 }
 
-function whiteCp(score: AnalysisLine["score"], fen: string): number {
-  const white = scoreToWhitePerspective(score, fen);
-  if (white.kind === "mate") return white.value >= 0 ? 100000 : -100000;
-  return white.value;
+type ReviewState = {
+  review: GameReview;
+  evals: Map<string, PositionEval>;
+  cancelled: boolean;
+  total: number;
+};
+
+function sideToMove(fen: string): "w" | "b" {
+  return fen.split(/\s+/)[1] === "b" ? "b" : "w";
+}
+
+function whiteWinPercent(evaluation: PositionEval | undefined, fen: string): number | null {
+  if (!evaluation) return null;
+  return winPercent(povValue(evaluation.score, sideToMove(fen), "w"));
 }
 
 export default function App() {
@@ -118,15 +136,24 @@ export default function App() {
   const [showBoardArrows, setShowBoardArrows] = useState(false);
   const [analyzingGame, setAnalyzingGame] = useState(false);
   const [analyzeProgress, setAnalyzeProgress] = useState<{ done: number; total: number } | null>(null);
-  const [analyzeSummary, setAnalyzeSummary] = useState<GameAnalysisSummary | null>(null);
+  const [reviewState, setReviewState] = useState<ReviewState | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewPreset, setReviewPreset] = useState<ReviewPreset>("standard");
   const engineRef = useRef<StockfishClient | null>(null);
-  const evalCacheRef = useRef<Map<string, number>>(new Map());
+  const evalCacheRef = useRef<Map<string, PositionEval>>(new Map());
   const analyzeCancelRef = useRef(false);
 
   const baseFen = useMemo(() => buildFen(position), [position]);
   const treeFen = useMemo(() => currentFen(tree), [tree]);
   const fen = setupMode ? baseFen : treeFen;
   const validation = useMemo(() => validatePositionFen(fen), [fen]);
+
+  // Engine updates name the position they belong to; anything for another
+  // position is stale (e.g. the board moved on before the engine caught up).
+  const liveAnalysis = useMemo<AnalysisUpdate>(
+    () => (analysis.fen && analysis.fen !== fen ? { status: "loading", lines: [] } : analysis),
+    [analysis, fen]
+  );
 
   const game = useMemo(() => {
     if (setupMode || !validation.ok) return null;
@@ -193,7 +220,7 @@ export default function App() {
       return [{ from: move.slice(0, 2) as Square, to: move.slice(2, 4) as Square, tone: "best" }];
     }
     if (!showBoardArrows) return [];
-    return analysis.lines
+    return liveAnalysis.lines
       .map((line, index) => {
         const move = line.uciMoves[0];
         if (!move || move.length < 4) return null;
@@ -204,7 +231,7 @@ export default function App() {
         } satisfies BoardArrow;
       })
       .filter((arrow): arrow is BoardArrow => Boolean(arrow));
-  }, [activeVariation, analysis.lines, showBoardArrows]);
+  }, [activeVariation, liveAnalysis.lines, showBoardArrows]);
 
   const activeVariationView = useMemo<ActiveVariationView | null>(() => {
     if (!activeVariation) return null;
@@ -274,39 +301,40 @@ export default function App() {
     window.localStorage.setItem("chess-sound", soundOn ? "on" : "off");
   }, [soundOn]);
 
-  // Best-effort move-quality annotation: when the engine settles on a position,
-  // cache its eval and grade the move that produced it against its parent.
+  // Best-effort move grading while exploring: when the engine settles on the
+  // board position, cache its eval and grade the move that led here against
+  // its parent. Moves graded by a full game review keep that verdict.
   useEffect(() => {
     if (setupMode || analyzingGame) return;
-    if (analysis.status !== "ready" && analysis.status !== "fallback") return;
+    if (analysis.status !== "ready" || analysis.fen !== fen) return;
     const top = analysis.lines[0];
     if (!top) return;
 
-    const cp = whiteCp(top.score, fen);
-    evalCacheRef.current.set(fen, cp);
+    const evaluation: PositionEval = {
+      score: top.score,
+      depth: top.depth,
+      ...((analysis.bestMove ?? top.uciMoves[0]) ? { bestMove: analysis.bestMove ?? top.uciMoves[0] } : {})
+    };
+    evalCacheRef.current.set(fen, evaluation);
 
     const node = currentNode(tree);
-    if (!node) return;
+    if (!node || reviewState?.review.moves[node.id]) return;
     const parentFen = node.parentId ? tree.nodes[node.parentId]?.fen ?? tree.rootFen : tree.rootFen;
-    const parentCp = evalCacheRef.current.get(parentFen);
-    if (parentCp === undefined) return;
+    const parent = evalCacheRef.current.get(parentFen);
+    if (!parent) return;
 
-    // Clamp to ±10 pawns before comparing: a winning position that stays
-    // winning (or a mate that becomes a faster mate) is not a mistake, and this
-    // keeps mate scores from swamping the heuristic.
-    const clamp = (value: number) => Math.max(-1000, Math.min(1000, value));
-    const moverSign = node.color === "w" ? 1 : -1;
-    const loss = moverSign * (clamp(parentCp) - clamp(cp));
-    const nag = classifyByLoss(loss);
+    const { judgement } = judgeMove({ mover: node.color, before: parent, after: evaluation, playedUci: node.uci });
+    const nag = nagForJudgement(judgement);
     if (node.nag !== nag) setTree((current) => setNag(current, node.id, nag));
-  }, [analysis.status, analysis.lines, fen, setupMode, analyzingGame, tree]);
+  }, [analysis, fen, setupMode, analyzingGame, tree, reviewState]);
 
   const resetTreeTo = useCallback((rootFen: string) => {
     setTree(createTree(rootFen));
     setActiveVariation(null);
     setSelectedSquare(null);
     setAnalysis({ status: "idle", lines: [] });
-    setAnalyzeSummary(null);
+    setReviewState(null);
+    setReviewError(null);
   }, []);
 
   const navigate = useCallback((fn: (tree: GameTree) => GameTree) => {
@@ -473,7 +501,8 @@ export default function App() {
       setSelectedSquare(null);
       setActiveVariation(null);
       setAnalysis({ status: "idle", lines: [] });
-      setAnalyzeSummary(null);
+      setReviewState(null);
+      setReviewError(null);
     } catch (error) {
       setAnalysis({
         status: "error",
@@ -505,7 +534,7 @@ export default function App() {
 
   function handleToggleBoardArrows() {
     if (!validation.ok) return;
-    if (!showBoardArrows && !analysis.lines.length) {
+    if (!showBoardArrows && !liveAnalysis.lines.length) {
       engineRef.current?.analyze(fen, { depth, multipv });
     }
     setShowBoardArrows((current) => !current);
@@ -518,62 +547,45 @@ export default function App() {
     analyzeCancelRef.current = false;
     setAnalyzingGame(true);
     setActiveVariation(null);
-    setAnalyzeSummary(null);
+    setReviewState(null);
+    setReviewError(null);
 
-    const fenByNode = new Map(nodes.map((node) => [node.id, node.fen] as const));
-    const parentFenByNode = new Map(
-      nodes.map(
-        (node) =>
-          [node.id, node.parentId ? tree.nodes[node.parentId]?.fen ?? tree.rootFen : tree.rootFen] as const
-      )
-    );
+    const moves = nodes.map((node) => ({
+      id: node.id,
+      color: node.color,
+      uci: node.uci,
+      fen: node.fen,
+      parentFen: node.parentId ? tree.nodes[node.parentId]?.fen ?? tree.rootFen : tree.rootFen
+    }));
     const fens = Array.from(new Set([tree.rootFen, ...nodes.map((node) => node.fen)]));
-
     setAnalyzeProgress({ done: 0, total: fens.length });
 
-    const evals = await evaluateFens(
-      fens,
-      depth,
-      (done, total) => setAnalyzeProgress({ done, total }),
-      () => analyzeCancelRef.current
-    );
+    try {
+      const { evals, cancelled } = await evaluatePositions(fens, REVIEW_PRESETS[reviewPreset].nodes, {
+        onProgress: (done, total) => setAnalyzeProgress({ done, total }),
+        isCancelled: () => analyzeCancelRef.current
+      });
 
-    for (const [fenString, score] of evals) {
-      evalCacheRef.current.set(fenString, whiteCp(score, fenString));
+      for (const [positionFen, evaluation] of evals) evalCacheRef.current.set(positionFen, evaluation);
+
+      // Grade first, then apply NAGs in one pure updater (safe under StrictMode).
+      const review = buildReview(moves, evals);
+      setTree((current) => {
+        let next = current;
+        for (const move of Object.values(review.moves)) {
+          next = setNag(next, move.nodeId, nagForJudgement(move.judgement));
+        }
+        return next;
+      });
+      setReviewState({ review, evals, cancelled, total: fens.length });
+    } catch (error) {
+      setReviewError(
+        `Game review failed: ${error instanceof Error ? error.message : "the engine stopped working"}.`
+      );
+    } finally {
+      setAnalyzeProgress(null);
+      setAnalyzingGame(false);
     }
-
-    // Compute classifications purely first (no side effects), so the setTree
-    // updater stays pure and StrictMode's double-invoke can't double-count.
-    const clamp = (value: number) => Math.max(-1000, Math.min(1000, value));
-    const summary: GameAnalysisSummary = { blunders: 0, mistakes: 0, inaccuracies: 0 };
-    const nagUpdates: { id: string; nag: number | undefined }[] = [];
-
-    for (const node of nodes) {
-      const nodeFen = fenByNode.get(node.id)!;
-      const parentFen = parentFenByNode.get(node.id)!;
-      const childScore = evals.get(nodeFen);
-      const parentScore = evals.get(parentFen);
-      if (!childScore || !parentScore) continue;
-
-      const moverSign = node.color === "w" ? 1 : -1;
-      const loss = moverSign * (clamp(whiteCp(parentScore, parentFen)) - clamp(whiteCp(childScore, nodeFen)));
-      const nag = classifyByLoss(loss);
-      nagUpdates.push({ id: node.id, nag });
-
-      if (nag === NAG_BY_QUALITY.blunder) summary.blunders += 1;
-      else if (nag === NAG_BY_QUALITY.mistake) summary.mistakes += 1;
-      else if (nag === NAG_BY_QUALITY.inaccuracy) summary.inaccuracies += 1;
-    }
-
-    setTree((current) => {
-      let next = current;
-      for (const update of nagUpdates) next = setNag(next, update.id, update.nag);
-      return next;
-    });
-
-    setAnalyzeSummary(summary);
-    setAnalyzeProgress(null);
-    setAnalyzingGame(false);
   }
 
   function handleCancelAnalyzeGame() {
@@ -604,6 +616,21 @@ export default function App() {
   function copyText(value: string) {
     void navigator.clipboard?.writeText(value);
   }
+
+  const reviewView = useMemo<ReviewView | null>(() => {
+    if (!reviewState) return null;
+    const { review, evals, cancelled, total } = reviewState;
+    const points: EvalPoint[] = [
+      { id: null, label: "Start", whiteWin: whiteWinPercent(evals.get(tree.rootFen), tree.rootFen) },
+      ...mainlineNodes(tree).map((node) => ({
+        id: node.id,
+        label: `${node.moveNumber}${node.color === "w" ? "." : "…"} ${node.san}`,
+        whiteWin: whiteWinPercent(evals.get(node.fen), node.fen),
+        ...(review.moves[node.id] ? { judgement: review.moves[node.id].judgement } : {})
+      }))
+    ];
+    return { review, points, cancelled, evaluated: evals.size, total };
+  }, [reviewState, tree]);
 
   const canInteract = !setupMode && !activeVariation && Boolean(game);
 
@@ -637,7 +664,7 @@ export default function App() {
             </div>
           ) : null}
           <div className="board-with-eval">
-            <EvalBar fen={fen} line={analysis.lines[0]} status={analysis.status} />
+            <EvalBar fen={fen} line={liveAnalysis.lines[0]} status={liveAnalysis.status} />
             <div className="board-column">
               <ChessBoard
                 board={displayPosition.board}
@@ -683,10 +710,10 @@ export default function App() {
 
         <aside className="side-rail" aria-label="Analyzer controls">
           <AnalysisPanel
-            status={analysis.status}
-            lines={analysis.lines}
-            bestMove={analysis.bestMove}
-            message={analysis.message}
+            status={liveAnalysis.status}
+            lines={liveAnalysis.lines}
+            bestMove={liveAnalysis.bestMove}
+            message={liveAnalysis.message}
             fen={fen}
             depth={depth}
             multipv={multipv}
@@ -749,7 +776,10 @@ export default function App() {
             onCancelAnalyzeGame={handleCancelAnalyzeGame}
             analyzing={analyzingGame}
             analyzeProgress={analyzeProgress}
-            analyzeSummary={analyzeSummary}
+            reviewView={reviewView}
+            reviewError={reviewError}
+            reviewPreset={reviewPreset}
+            onReviewPresetChange={setReviewPreset}
             canAnalyzeGame={tree.rootChildren.length > 0}
           />
         </aside>

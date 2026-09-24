@@ -164,6 +164,14 @@ export function validatePositionFen(fen: string): { ok: boolean; error?: string 
 
   try {
     new Chess(fen);
+    // Stockfish returns no analysis at all when the side that just moved is
+    // still in check, so reject that setup here with a clear reason.
+    const fields = fen.trim().split(/\s+/);
+    const flipped = [fields[0], fields[1] === "w" ? "b" : "w", fields[2] ?? "-", "-", "0", "1"].join(" ");
+    if (new Chess(flipped, { skipValidation: true }).isCheck()) {
+      const waiting = fields[1] === "w" ? "Black" : "White";
+      return { ok: false, error: `${waiting} is in check but it is not ${waiting}'s turn.` };
+    }
     return { ok: true };
   } catch (error) {
     return {

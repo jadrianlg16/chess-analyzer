@@ -1,3 +1,5 @@
+import type { Judgement } from "./review";
+
 /** Numeric Annotation Glyphs (a subset of the PGN standard). */
 export type MoveQuality = "brilliant" | "good" | "interesting" | "inaccuracy" | "mistake" | "blunder";
 
@@ -24,14 +26,10 @@ export function nagGlyph(nag: number | undefined) {
   return GLYPHS[nag] ?? null;
 }
 
-/**
- * Classify a move by how much it changed the evaluation (in centipawns, from
- * the mover's perspective). `lostCp` is how much worse the position became for
- * the side that moved compared with the best available move.
- */
-export function classifyByLoss(lostCp: number): number | undefined {
-  if (lostCp >= 250) return NAG_BY_QUALITY.blunder;
-  if (lostCp >= 120) return NAG_BY_QUALITY.mistake;
-  if (lostCp >= 50) return NAG_BY_QUALITY.inaccuracy;
+/** Only errors get a glyph; best and good moves are left unannotated. */
+export function nagForJudgement(judgement: Judgement): number | undefined {
+  if (judgement === "blunder") return NAG_BY_QUALITY.blunder;
+  if (judgement === "mistake") return NAG_BY_QUALITY.mistake;
+  if (judgement === "inaccuracy") return NAG_BY_QUALITY.inaccuracy;
   return undefined;
 }

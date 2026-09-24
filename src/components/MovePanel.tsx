@@ -2,13 +2,18 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { ArrowUpNarrowWide, Download, Sparkles, Square as StopIcon, Trash2, Upload } from "lucide-react";
 import type { GameTree } from "../lib/gameTree";
 import { childrenOf } from "../lib/gameTree";
+import { REVIEW_PRESETS, type ReviewPreset } from "../lib/gameAnalysis";
 import { nagGlyph } from "../lib/nags";
+import type { GameReview, MoveReview, SideSummary } from "../lib/review";
 import { CollapsiblePanel } from "./CollapsiblePanel";
+import { EvalGraph, type EvalPoint } from "./EvalGraph";
 
-export type GameAnalysisSummary = {
-  blunders: number;
-  mistakes: number;
-  inaccuracies: number;
+export type ReviewView = {
+  review: GameReview;
+  points: EvalPoint[];
+  cancelled: boolean;
+  evaluated: number;
+  total: number;
 };
 
 type MovePanelProps = {
@@ -25,7 +30,10 @@ type MovePanelProps = {
   onCancelAnalyzeGame: () => void;
   analyzing: boolean;
   analyzeProgress: { done: number; total: number } | null;
-  analyzeSummary: GameAnalysisSummary | null;
+  reviewView: ReviewView | null;
+  reviewError: string | null;
+  reviewPreset: ReviewPreset;
+  onReviewPresetChange: (preset: ReviewPreset) => void;
   canAnalyzeGame: boolean;
 };
 
@@ -45,9 +53,15 @@ export function MovePanel({
   onCancelAnalyzeGame,
   analyzing,
   analyzeProgress,
-  analyzeSummary,
+  reviewView,
+  reviewError,
+  reviewPreset,
+  onReviewPresetChange,
   canAnalyzeGame
 }: MovePanelProps) {
+  const reviews = reviewView?.review.moves ?? null;
+  const currentNode = tree.currentId ? tree.nodes[tree.currentId] : undefined;
+  const currentReview = currentNode ? reviews?.[currentNode.id] : undefined;
   const [menu, setMenu] = useState<ContextMenu>(null);
   const hasMoves = tree.rootChildren.length > 0;
 
@@ -81,15 +95,30 @@ export function MovePanel({
             Stop ({analyzeProgress ? `${analyzeProgress.done}/${analyzeProgress.total}` : "…"})
           </button>
         ) : (
-          <button
-            className="secondary-button analyze-game-btn"
-            type="button"
-            disabled={!canAnalyzeGame}
-            onClick={onAnalyzeGame}
-          >
-            <Sparkles size={15} />
-            Analyze game
-          </button>
+          <>
+            <button
+              className="secondary-button analyze-game-btn"
+              type="button"
+              disabled={!canAnalyzeGame}
+              onClick={onAnalyzeGame}
+            >
+              <Sparkles size={15} />
+              Analyze game
+            </button>
+            <select
+              className="review-preset"
+              aria-label="Review strength"
+              title="How long the engine looks at each position"
+              value={reviewPreset}
+              onChange={(event) => onReviewPresetChange(event.target.value as ReviewPreset)}
+            >
+              {(Object.keys(REVIEW_PRESETS) as ReviewPreset[]).map((preset) => (
+                <option key={preset} value={preset}>
+                  {REVIEW_PRESETS[preset].label}
+                </option>
+              ))}
+            </select>
+          </>
         )}
 
         {analyzing && analyzeProgress ? (
@@ -103,20 +132,30 @@ export function MovePanel({
           </div>
         ) : null}
 
-        {!analyzing && analyzeSummary ? (
-          <div className="analysis-summary" aria-label="Move quality summary">
-            <span className="summary-chip quality-blunder" title="Blunders">
-              ?? {analyzeSummary.blunders}
-            </span>
-            <span className="summary-chip quality-mistake" title="Mistakes">
-              ? {analyzeSummary.mistakes}
-            </span>
-            <span className="summary-chip quality-inaccuracy" title="Inaccuracies">
-              ?! {analyzeSummary.inaccuracies}
-            </span>
-          </div>
-        ) : null}
       </div>
+
+      {reviewError && !analyzing ? <p className="engine-message">{reviewError}</p> : null}
+
+      {reviewView && !analyzing ? (
+        <div className="game-review">
+          <div className="review-summary" aria-label="Game review summary">
+            <SideRow name="White" summary={reviewView.review.white} />
+            <SideRow name="Black" summary={reviewView.review.black} />
+          </div>
+          {reviewView.cancelled ? (
+            <p className="review-note">
+              Review stopped early: {reviewView.evaluated} of {reviewView.total} positions evaluated.
+            </p>
+          ) : null}
+          <EvalGraph points={reviewView.points} currentId={tree.currentId} onSelect={onGoTo} />
+          {currentNode ? (
+            <MoveVerdict
+              label={`${currentNode.moveNumber}${currentNode.color === "w" ? "." : "…"} ${currentNode.san}`}
+              review={currentReview}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="movetext" role="list" aria-label="Move list">
         {hasMoves ? (
@@ -126,6 +165,7 @@ export function MovePanel({
             startsSequence
             depth={0}
             currentId={tree.currentId}
+            reviews={reviews}
             onGoTo={onGoTo}
             onContext={(id, x, y) => setMenu({ id, x, y })}
           />
@@ -185,6 +225,7 @@ type BranchProps = {
   startsSequence: boolean;
   depth: number;
   currentId: string | null;
+  reviews: Record<string, MoveReview> | null;
   onGoTo: (id: string) => void;
   onContext: (id: string, x: number, y: number) => void;
 };
@@ -193,7 +234,7 @@ type BranchProps = {
  * Renders a list of alternative continuations. The first child is the main
  * line; the rest are variations rendered inline in parentheses.
  */
-function Branch({ tree, childrenIds, startsSequence, depth, currentId, onGoTo, onContext }: BranchProps) {
+function Branch({ tree, childrenIds, startsSequence, depth, currentId, reviews, onGoTo, onContext }: BranchProps) {
   if (!childrenIds.length) return null;
   const [mainId, ...variations] = childrenIds;
 
@@ -204,6 +245,7 @@ function Branch({ tree, childrenIds, startsSequence, depth, currentId, onGoTo, o
       id={mainId}
       startsSequence={startsSequence}
       currentId={currentId}
+      reviews={reviews}
       onGoTo={onGoTo}
       onContext={onContext}
     />
@@ -218,6 +260,7 @@ function Branch({ tree, childrenIds, startsSequence, depth, currentId, onGoTo, o
           id={varId}
           startsSequence
           currentId={currentId}
+          reviews={reviews}
           onGoTo={onGoTo}
           onContext={onContext}
         />
@@ -227,6 +270,7 @@ function Branch({ tree, childrenIds, startsSequence, depth, currentId, onGoTo, o
           startsSequence={false}
           depth={depth + 1}
           currentId={currentId}
+          reviews={reviews}
           onGoTo={onGoTo}
           onContext={onContext}
         />
@@ -243,6 +287,7 @@ function Branch({ tree, childrenIds, startsSequence, depth, currentId, onGoTo, o
       startsSequence={variations.length > 0}
       depth={depth}
       currentId={currentId}
+      reviews={reviews}
       onGoTo={onGoTo}
       onContext={onContext}
     />
@@ -256,17 +301,20 @@ type MoveTokenProps = {
   id: string;
   startsSequence: boolean;
   currentId: string | null;
+  reviews: Record<string, MoveReview> | null;
   onGoTo: (id: string) => void;
   onContext: (id: string, x: number, y: number) => void;
 };
 
-function MoveToken({ tree, id, startsSequence, currentId, onGoTo, onContext }: MoveTokenProps) {
+function MoveToken({ tree, id, startsSequence, currentId, reviews, onGoTo, onContext }: MoveTokenProps) {
   const node = tree.nodes[id];
   if (!node) return null;
 
   const showNumber = node.color === "w" || startsSequence;
   const numberLabel = node.color === "w" ? `${node.moveNumber}.` : `${node.moveNumber}…`;
   const glyph = nagGlyph(node.nag);
+  const bestSan = reviews?.[id]?.bestSan;
+  const title = glyph ? (bestSan ? `${glyph.label}. Best was ${bestSan}` : glyph.label) : undefined;
 
   return (
     <button
@@ -278,11 +326,75 @@ function MoveToken({ tree, id, startsSequence, currentId, onGoTo, onContext }: M
         event.preventDefault();
         onContext(id, event.clientX, event.clientY);
       }}
-      title={glyph ? glyph.label : undefined}
+      title={title}
     >
       {showNumber ? <span className="move-number">{numberLabel}</span> : null}
       <span className="move-san">{node.san}</span>
       {glyph ? <span className="move-nag">{glyph.symbol}</span> : null}
     </button>
+  );
+}
+
+const VERDICT_LABEL: Record<MoveReview["judgement"], string> = {
+  best: "Best move",
+  good: "Good move",
+  inaccuracy: "Inaccuracy",
+  mistake: "Mistake",
+  blunder: "Blunder"
+};
+
+function SideRow({ name, summary }: { name: string; summary: SideSummary }) {
+  return (
+    <div className="review-side">
+      <span className="review-side-name">{name}</span>
+      <span className="review-accuracy" title="Average per-move accuracy (Lichess formula)">
+        {summary.accuracy === null ? "–" : `${Math.round(summary.accuracy)}%`}
+        <small>accuracy</small>
+      </span>
+      <span className="summary-chip quality-inaccuracy" title="Inaccuracies">
+        ?! {summary.inaccuracies}
+      </span>
+      <span className="summary-chip quality-mistake" title="Mistakes">
+        ? {summary.mistakes}
+      </span>
+      <span className="summary-chip quality-blunder" title="Blunders">
+        ?? {summary.blunders}
+      </span>
+    </div>
+  );
+}
+
+function MoveVerdict({ label, review }: { label: string; review: MoveReview | undefined }) {
+  if (!review) {
+    return (
+      <p className="move-verdict">
+        <strong>{label}</strong> <span className="move-verdict-note">Not part of the review.</span>
+      </p>
+    );
+  }
+
+  const isError =
+    review.judgement === "inaccuracy" || review.judgement === "mistake" || review.judgement === "blunder";
+  const reason =
+    review.reason === "allowed-mate"
+      ? " Allows a forced mate."
+      : review.reason === "missed-mate"
+        ? " Misses a forced mate."
+        : "";
+
+  return (
+    <p className={`move-verdict verdict-${review.judgement}`}>
+      <strong>{label}</strong> <span className="move-verdict-judgement">{VERDICT_LABEL[review.judgement]}.</span>
+      {reason}
+      {isError && review.bestSan ? (
+        <>
+          {" "}
+          Best was <strong>{review.bestSan}</strong>.
+        </>
+      ) : null}
+      <span className="move-verdict-note">
+        Winning chances {Math.round(review.winBefore)}% → {Math.round(review.winAfter)}%
+      </span>
+    </p>
   );
 }

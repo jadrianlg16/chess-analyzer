@@ -854,11 +854,6 @@ h2 {
   color: var(--blue);
 }
 
-.status-fallback {
-  background: #fff3d6;
-  color: #775819;
-}
-
 .status-error,
 .fen-status.bad {
   background: #f6e4e4;
@@ -1771,9 +1766,203 @@ textarea {
   transition: width 120ms ease;
 }
 
-.analysis-summary {
-  display: flex;
+.review-preset {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.game-review {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+}
+
+.review-summary {
+  display: grid;
   gap: 6px;
+}
+
+.review-side {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.review-side-name {
+  font-size: 13px;
+  font-weight: 800;
+  width: 44px;
+}
+
+.review-accuracy {
+  align-items: baseline;
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 800;
+  gap: 4px;
+  min-width: 96px;
+}
+
+.review-accuracy small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.review-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.eval-graph {
+  margin: 0;
+}
+
+.eval-graph figcaption {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.eval-graph-plot {
+  position: relative;
+}
+
+.eval-graph svg {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.eval-graph-tick {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.eval-graph-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.eval-graph-area {
+  fill: var(--ink);
+  fill-opacity: 0.1;
+}
+
+.eval-graph-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.eval-graph-current {
+  stroke: var(--green);
+  stroke-width: 2;
+}
+
+.eval-graph-crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.eval-graph-marker {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.eval-graph-marker.marker-inaccuracy {
+  fill: #c9a800;
+}
+
+.eval-graph-marker.marker-mistake {
+  fill: #e5641c;
+}
+
+.eval-graph-marker.marker-blunder {
+  fill: #b01e3a;
+}
+
+.eval-graph-hit {
+  cursor: pointer;
+  fill: transparent;
+}
+
+.eval-graph-tooltip {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 8px 22px rgba(28, 38, 32, 0.16);
+  display: grid;
+  font-size: 11px;
+  gap: 1px;
+  padding: 5px 8px;
+  pointer-events: none;
+  position: absolute;
+  top: -6px;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.eval-graph-tooltip strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.eval-graph-tooltip span {
+  color: var(--muted);
+}
+
+.eval-graph-tooltip .eval-graph-tooltip-move {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.move-verdict {
+  background: var(--panel-soft);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.move-verdict-judgement {
+  font-weight: 800;
+}
+
+.verdict-best .move-verdict-judgement,
+.verdict-good .move-verdict-judgement {
+  color: var(--green-strong);
+}
+
+.verdict-inaccuracy .move-verdict-judgement {
+  color: #8a6d00;
+}
+
+.verdict-mistake .move-verdict-judgement {
+  color: #a8481a;
+}
+
+.verdict-blunder .move-verdict-judgement {
+  color: #b01e3a;
+}
+
+.move-verdict-note {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
 }
 
 .summary-chip {

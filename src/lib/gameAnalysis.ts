@@ -1,78 +1,61 @@
-import { ENGINE_PATH, parseInfoLine, type EngineScore } from "./analysis";
+import { createEngineWorker } from "./analysis";
+import { UciEngine, type WorkerLike } from "./engine";
+import type { PositionEval } from "./review";
+
+export type ReviewPreset = "quick" | "standard" | "deep";
 
 /**
- * A single-position evaluator used for the "analyze whole game" pass. It owns a
- * dedicated Stockfish worker so it never interferes with the live analysis
- * engine, and resolves each position once the engine returns `bestmove`.
+ * Review budgets are node counts rather than depths: a fixed depth can take
+ * 30x longer in sharp positions, while a node budget bounds the work per
+ * position and gives the same result on every run of the single-threaded
+ * engine. Rough cost at ~1.3M nodes/s: 60k ≈ 0.05 s, 250k ≈ 0.2 s,
+ * 1M ≈ 0.8 s per position (slower on phones).
  */
-class GameEvaluator {
-  private worker: Worker | null = null;
+export const REVIEW_PRESETS: Record<ReviewPreset, { label: string; nodes: number }> = {
+  quick: { label: "Quick", nodes: 60_000 },
+  standard: { label: "Standard", nodes: 250_000 },
+  deep: { label: "Deep", nodes: 1_000_000 }
+};
 
-  private ensureWorker(): Worker {
-    if (!this.worker) {
-      this.worker = new Worker(ENGINE_PATH);
-      this.worker.postMessage("uci");
-      this.worker.postMessage("setoption name MultiPV value 1");
-    }
-    return this.worker;
-  }
-
-  evaluate(fen: string, depth: number): Promise<EngineScore | null> {
-    const worker = this.ensureWorker();
-    return new Promise((resolve) => {
-      let last: EngineScore | null = null;
-      const onMessage = (event: MessageEvent) => {
-        const message = String(event.data);
-        const parsed = parseInfoLine(message, fen);
-        if (parsed && parsed.multipv === 1) last = parsed.score;
-        if (message.startsWith("bestmove")) {
-          worker.removeEventListener("message", onMessage);
-          resolve(last);
-        }
-      };
-      worker.addEventListener("message", onMessage);
-      worker.postMessage("stop");
-      worker.postMessage("ucinewgame");
-      worker.postMessage(`position fen ${fen}`);
-      worker.postMessage(`go depth ${depth}`);
-    });
-  }
-
-  dispose() {
-    if (!this.worker) return;
-    try {
-      this.worker.postMessage("quit");
-    } catch {
-      /* worker may already be gone */
-    }
-    this.worker.terminate();
-    this.worker = null;
-  }
-}
+export type EvaluateOptions = {
+  onProgress?: (done: number, total: number) => void;
+  isCancelled?: () => boolean;
+  createWorker?: () => WorkerLike;
+};
 
 /**
- * Evaluate a list of unique FENs sequentially, reporting progress. Honours a
- * cancellation check between positions so the user can stop a long pass.
+ * Evaluate positions one after another on a dedicated engine (so the live
+ * analysis engine is never disturbed), keeping the best move for each.
  */
-export async function evaluateFens(
+export async function evaluatePositions(
   fens: string[],
-  depth: number,
-  onProgress?: (done: number, total: number) => void,
-  isCancelled?: () => boolean
-): Promise<Map<string, EngineScore>> {
-  const evaluator = new GameEvaluator();
-  const map = new Map<string, EngineScore>();
+  nodes: number,
+  options: EvaluateOptions = {}
+): Promise<{ evals: Map<string, PositionEval>; cancelled: boolean }> {
+  const engine = new UciEngine({ createWorker: options.createWorker ?? createEngineWorker });
+  const evals = new Map<string, PositionEval>();
+  let cancelled = false;
 
   try {
     for (let index = 0; index < fens.length; index += 1) {
-      if (isCancelled?.()) break;
-      const score = await evaluator.evaluate(fens[index], depth);
-      if (score) map.set(fens[index], score);
-      onProgress?.(index + 1, fens.length);
+      if (options.isCancelled?.()) {
+        cancelled = true;
+        break;
+      }
+      const result = await engine.search({ fen: fens[index], multipv: 1, limits: { nodes } });
+      const top = result.lines[0];
+      if (top) {
+        evals.set(fens[index], {
+          score: top.score,
+          depth: top.depth,
+          ...(result.bestMove ? { bestMove: result.bestMove } : {})
+        });
+      }
+      options.onProgress?.(index + 1, fens.length);
     }
   } finally {
-    evaluator.dispose();
+    engine.dispose();
   }
 
-  return map;
+  return { evals, cancelled };
 }

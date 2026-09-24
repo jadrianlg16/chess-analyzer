@@ -15,9 +15,12 @@ export type EvaluationDisplay = {
 const EQUAL_THRESHOLD_CP = 20;
 const BAR_CAP_CP = 800;
 
+function sideToMove(fen: string): "w" | "b" {
+  return fen.split(/\s+/)[1] === "b" ? "b" : "w";
+}
+
 export function scoreToWhitePerspective(score: EngineScore, fen: string): EngineScore {
-  const turn = fen.split(/\s+/)[1] === "b" ? "b" : "w";
-  const multiplier = turn === "w" ? 1 : -1;
+  const multiplier = sideToMove(fen) === "w" ? 1 : -1;
 
   return {
     kind: score.kind,
@@ -26,6 +29,7 @@ export function scoreToWhitePerspective(score: EngineScore, fen: string): Engine
 }
 
 export function scoreLabelForFen(score: EngineScore, fen: string): string {
+  if (score.kind === "mate" && score.value === 0) return "#";
   return scoreLabelFromWhite(scoreToWhitePerspective(score, fen));
 }
 
@@ -38,6 +42,20 @@ export function evaluationFromLine(fen: string, line?: AnalysisLine): Evaluation
       caption: "No eval",
       whiteShare: 50,
       ariaLabel: "No engine evaluation yet"
+    };
+  }
+
+  if (line.score.kind === "mate" && line.score.value === 0) {
+    // The side to move is checkmated.
+    const winner = sideToMove(fen) === "w" ? "black" : "white";
+    const name = winner === "white" ? "White" : "Black";
+    return {
+      leader: winner,
+      placement: winner === "white" ? "top" : "bottom",
+      label: "#",
+      caption: name,
+      whiteShare: winner === "white" ? 100 : 0,
+      ariaLabel: `Checkmate, ${name} wins`
     };
   }
 
