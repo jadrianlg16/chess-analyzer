@@ -6,6 +6,8 @@ type Listener = (event: { data?: unknown; message?: string }) => void;
 export type FakeOptions = {
   /** Score (cp, side to move's view) the fake reports for a position. */
   scoreFor?: (fen: string) => number;
+  /** Score for a `searchmoves`-restricted search of one move. */
+  scoreForMove?: (fen: string, move: string) => number;
   /** When false, a search only ends on `stop` (like `go infinite`). */
   autoFinish?: boolean;
   /** Crash as soon as the next search starts. */
@@ -91,7 +93,7 @@ export class FakeStockfish implements WorkerLike {
     } else if (command.startsWith("position fen ")) {
       this.fen = command.slice("position fen ".length).split(" moves ")[0];
     } else if (command.startsWith("go")) {
-      this.startSearch();
+      this.startSearch(command);
     } else if (command === "stop") {
       if (this.searching && !this.options.ignoreStop) {
         this.clearSearch();
@@ -100,7 +102,7 @@ export class FakeStockfish implements WorkerLike {
     }
   }
 
-  private startSearch() {
+  private startSearch(command: string) {
     this.goCount += 1;
     this.searching = true;
     if (this.options.crashOnGo) {
@@ -108,9 +110,13 @@ export class FakeStockfish implements WorkerLike {
       return;
     }
 
-    const moves = new Chess(this.fen).moves({ verbose: true }).map((move) => move.lan);
+    const restricted = command.split(" searchmoves ")[1]?.split(" ");
+    const moves = restricted ?? new Chess(this.fen).moves({ verbose: true }).map((move) => move.lan);
     this.pv = moves.slice(0, this.multipv);
-    const cp = this.options.scoreFor?.(this.fen) ?? 25;
+    const cp =
+      restricted && this.options.scoreForMove
+        ? this.options.scoreForMove(this.fen, restricted[0])
+        : this.options.scoreFor?.(this.fen) ?? 25;
     for (let depth = 1; depth <= 3; depth += 1) {
       this.searchTimers.push(
         setTimeout(() => {

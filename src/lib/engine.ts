@@ -21,6 +21,8 @@ export type SearchLimits = {
   depth?: number;
   nodes?: number;
   movetimeMs?: number;
+  /** Only consider these moves (UCI). */
+  searchMoves?: string[];
 };
 
 export type SearchRequest = {
@@ -361,7 +363,10 @@ function goCommand(limits: SearchLimits): string {
   if (limits.depth !== undefined) parts.push("depth", String(Math.max(1, Math.trunc(limits.depth))));
   if (limits.nodes !== undefined) parts.push("nodes", String(Math.max(1, Math.trunc(limits.nodes))));
   if (limits.movetimeMs !== undefined) parts.push("movetime", String(Math.max(1, Math.trunc(limits.movetimeMs))));
-  return parts.length > 1 ? parts.join(" ") : "go depth 16";
+  if (parts.length === 1) parts.push("depth", "16");
+  // Stockfish reads every token after `searchmoves` as a move, so it goes last.
+  if (limits.searchMoves?.length) parts.push("searchmoves", ...limits.searchMoves);
+  return parts.join(" ");
 }
 
 function sortedLines(lines: Map<number, UciInfo>): UciInfo[] {

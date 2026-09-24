@@ -1,6 +1,6 @@
 import { createEngineWorker } from "./analysis";
-import { UciEngine, type WorkerLike } from "./engine";
-import type { PositionEval } from "./review";
+import { UciEngine, type SearchLimits, type WorkerLike } from "./engine";
+import { buildReview, isError, type GameReview, type PositionEval, type ReviewedMove } from "./review";
 
 export type ReviewPreset = "quick" | "standard" | "deep";
 
@@ -17,45 +17,78 @@ export const REVIEW_PRESETS: Record<ReviewPreset, { label: string; nodes: number
   deep: { label: "Deep", nodes: 1_000_000 }
 };
 
-export type EvaluateOptions = {
+export type ReviewOptions = {
   onProgress?: (done: number, total: number) => void;
   isCancelled?: () => boolean;
   createWorker?: () => WorkerLike;
 };
 
+export type ReviewResult = {
+  review: GameReview;
+  evals: Map<string, PositionEval>;
+  cancelled: boolean;
+  /** Positions in the game (the review may have evaluated fewer if cancelled). */
+  positions: number;
+};
+
 /**
- * Evaluate positions one after another on a dedicated engine (so the live
- * analysis engine is never disturbed), keeping the best move for each.
+ * Review a game on a dedicated engine (so live analysis is never disturbed):
+ * 1. evaluate every position, keeping its best move;
+ * 2. give each move graded as an error a second look by searching only the
+ *    played move from the position before it, then grade again.
  */
-export async function evaluatePositions(
-  fens: string[],
+export async function reviewGame(
+  moves: ReviewedMove[],
+  rootFen: string,
   nodes: number,
-  options: EvaluateOptions = {}
-): Promise<{ evals: Map<string, PositionEval>; cancelled: boolean }> {
+  options: ReviewOptions = {}
+): Promise<ReviewResult> {
   const engine = new UciEngine({ createWorker: options.createWorker ?? createEngineWorker });
+  const fens = Array.from(new Set([rootFen, ...moves.map((move) => move.fen)]));
   const evals = new Map<string, PositionEval>();
+  const played = new Map<string, PositionEval>();
+  let total = fens.length;
+  let done = 0;
   let cancelled = false;
 
+  const evaluate = async (fen: string, limits: SearchLimits): Promise<PositionEval | null> => {
+    const result = await engine.search({ fen, multipv: 1, limits });
+    done += 1;
+    options.onProgress?.(done, total);
+    const top = result.lines[0];
+    if (!top) return null;
+    return { score: top.score, depth: top.depth, ...(result.bestMove ? { bestMove: result.bestMove } : {}) };
+  };
+
   try {
-    for (let index = 0; index < fens.length; index += 1) {
+    for (const fen of fens) {
       if (options.isCancelled?.()) {
         cancelled = true;
         break;
       }
-      const result = await engine.search({ fen: fens[index], multipv: 1, limits: { nodes } });
-      const top = result.lines[0];
-      if (top) {
-        evals.set(fens[index], {
-          score: top.score,
-          depth: top.depth,
-          ...(result.bestMove ? { bestMove: result.bestMove } : {})
+      const evaluation = await evaluate(fen, { nodes });
+      if (evaluation) evals.set(fen, evaluation);
+    }
+
+    const flagged = cancelled
+      ? []
+      : moves.filter((move) => {
+          const graded = buildReview([move], evals).moves[move.id];
+          return graded && isError(graded.judgement);
         });
+    total += flagged.length;
+
+    for (const move of flagged) {
+      if (options.isCancelled?.()) {
+        cancelled = true;
+        break;
       }
-      options.onProgress?.(index + 1, fens.length);
+      const evaluation = await evaluate(move.parentFen, { nodes, searchMoves: [move.uci] });
+      if (evaluation) played.set(move.id, evaluation);
     }
   } finally {
     engine.dispose();
   }
 
-  return { evals, cancelled };
+  return { review: buildReview(moves, evals, played), evals, cancelled, positions: fens.length };
 }

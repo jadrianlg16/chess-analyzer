@@ -55,6 +55,19 @@ describe("judgeMove", () => {
     expect(verdict.judgement).toBe("blunder");
   });
 
+  it("uses a second look at the played move when it rates the move higher", () => {
+    // Quick preset on the same position preferred Bxf6, so the best-move rule
+    // can't help; searching only Bxd7+ from the position before it can.
+    const before = cp(580, "g5f6");
+    const secondLook = cp(640, "b5d7");
+    expect(judgeMove({ mover: "w", before, after: afterBxd7, playedUci: "b5d7" }).judgement).toBe("blunder");
+    expect(judgeMove({ mover: "w", before, after: afterBxd7, playedUci: "b5d7", played: secondLook }).judgement).toBe("good");
+    // A second look never makes a move look worse than the search after it.
+    expect(
+      judgeMove({ mover: "w", before, after: cp(-560), playedUci: "b5d7", played: cp(100) }).judgement
+    ).toBe("good");
+  });
+
   it("does not punish a winning position that stays winning", () => {
     // +10 -> +7.5 was a "blunder" under the old 250 cp rule.
     const verdict = judgeMove({ mover: "w", before: cp(1000, "d1d8"), after: cp(-750), playedUci: "a2a3" });

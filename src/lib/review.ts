@@ -108,10 +108,19 @@ export function judgeMove(input: {
   before: PositionEval;
   after: PositionEval;
   playedUci: string;
+  /**
+   * Optional second opinion: the played move searched from the position before
+   * it (mover to move). Same root and budget as `before`, so when it rates the
+   * move higher than the search of `after` did, it wins.
+   */
+  played?: PositionEval;
 }): MoveJudgement {
   const opponent: Side = input.mover === "w" ? "b" : "w";
   const before = povValue(input.before.score, input.mover, input.mover);
-  const after = povValue(input.after.score, opponent, input.mover);
+  const afterSearch = povValue(input.after.score, opponent, input.mover);
+  const after = input.played
+    ? Math.max(afterSearch, povValue(input.played.score, input.mover, input.mover))
+    : afterSearch;
   const winBefore = winPercent(before);
   const winAfter = winPercent(after);
 
@@ -137,8 +146,19 @@ export function judgeMove(input: {
   return { judgement, winBefore, winAfter, accuracy };
 }
 
-/** Grade every move that has an evaluation for the position before and after it. */
-export function buildReview(moves: ReviewedMove[], evals: Map<string, PositionEval>): GameReview {
+export function isError(judgement: Judgement) {
+  return judgement === "inaccuracy" || judgement === "mistake" || judgement === "blunder";
+}
+
+/**
+ * Grade every move that has an evaluation for the position before and after
+ * it. `played` holds optional second-opinion searches keyed by move id.
+ */
+export function buildReview(
+  moves: ReviewedMove[],
+  evals: Map<string, PositionEval>,
+  played: Map<string, PositionEval> = new Map()
+): GameReview {
   const reviewed: Record<string, MoveReview> = {};
 
   for (const move of moves) {
@@ -146,7 +166,14 @@ export function buildReview(moves: ReviewedMove[], evals: Map<string, PositionEv
     const after = evals.get(move.fen);
     if (!before || !after) continue;
 
-    const judged = judgeMove({ mover: move.color, before, after, playedUci: move.uci });
+    const second = played.get(move.id);
+    const judged = judgeMove({
+      mover: move.color,
+      before,
+      after,
+      playedUci: move.uci,
+      ...(second ? { played: second } : {})
+    });
     const bestSan = before.bestMove ? uciLineToSan(move.parentFen, [before.bestMove])[0] : undefined;
     reviewed[move.id] = {
       ...judged,

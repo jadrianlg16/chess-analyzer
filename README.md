@@ -16,8 +16,10 @@ Launch app), or run it locally in one command below.
 - **Engine analysis** — evaluation bar, up to 3 principal variations
   (MultiPV), adjustable depth, best-move arrows. Score shown from White's
   perspective with mate-in-N detection.
-- **Game review** — load a PGN, step through moves, and run whole-game
-  analysis move by move.
+- **Game review** — load a PGN and grade every move: inaccuracies, mistakes
+  and blunders by the drop in winning chances, per-side accuracy, a
+  winning-chances graph, and the better move for each error. Quick /
+  Standard / Deep budgets (node counts, so results repeat run to run).
 - **Position tools** — FEN import/export with validation, side-to-move /
   castling / en-passant editing, board themes.
 
@@ -27,8 +29,10 @@ The interesting constraint: the single-threaded `stockfish-18-lite-single`
 WASM build needs no SharedArrayBuffer, which means **no COOP/COEP headers, no
 cross-origin isolation** — the app can be embedded anywhere (it runs inside a
 plain same-origin `<iframe>` on my portfolio). The engine speaks UCI over a
-Web Worker; the adapter layer (`src/lib/stockfishAdapter.ts`) handles the
-handshake, MultiPV parsing, and lifecycle so the UI never touches raw UCI.
+Web Worker; `src/lib/engine.ts` runs one search at a time and waits for
+each `bestmove` before sending the next command (the single-threaded build
+crashes if commands arrive while it is unwinding a search), and replaces the
+worker if it crashes or hangs.
 
 ## Architecture
 
@@ -36,13 +40,14 @@ handshake, MultiPV parsing, and lifecycle so the UI never touches raw UCI.
 src/
   lib/
     chessDomain.ts       FEN validation + move rules (chess.js under the hood)
-    stockfishAdapter.ts  UCI worker adapter: init, MultiPV, snapshots, errors
-    analysis.ts          High-level StockfishClient for the analysis panel
-    gameAnalysis.ts      Whole-game (PGN) analysis driver
+    engine.ts            UCI controller: serialized searches, crash recovery
+    analysis.ts          Live analysis client for the board (stale-proof)
+    gameAnalysis.ts      Game review driver (node-budget presets)
+    review.ts            Move grading: winning chances, accuracy, mate rules
     gameTree.ts          Move tree / navigation
   components/            Board, eval bar, analysis panel, setup panel, …
   types/chess.ts         Shared domain + engine types
-tests/                   Vitest: FEN cases, UCI parsing fixtures
+tests/                   Vitest: engine protocol (fake worker), grading, review
 scripts/copy-stockfish.mjs  Copies the WASM engine from node_modules → public/
 ```
 
@@ -67,7 +72,7 @@ docker run --rm -p 5016:80 chess-analyzer
 ## Test
 
 ```bash
-npm test           # vitest: domain rules + engine-output parsing
+npm test           # vitest: engine protocol, move grading, game review
 ```
 
 ## Stack

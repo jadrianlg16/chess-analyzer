@@ -4,7 +4,7 @@ import type { GameTree } from "../lib/gameTree";
 import { childrenOf } from "../lib/gameTree";
 import { REVIEW_PRESETS, type ReviewPreset } from "../lib/gameAnalysis";
 import { nagGlyph } from "../lib/nags";
-import type { GameReview, MoveReview, SideSummary } from "../lib/review";
+import { isError, type GameReview, type MoveReview, type SideSummary } from "../lib/review";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { EvalGraph, type EvalPoint } from "./EvalGraph";
 
@@ -373,8 +373,6 @@ function MoveVerdict({ label, review }: { label: string; review: MoveReview | un
     );
   }
 
-  const isError =
-    review.judgement === "inaccuracy" || review.judgement === "mistake" || review.judgement === "blunder";
   const reason =
     review.reason === "allowed-mate"
       ? " Allows a forced mate."
@@ -386,7 +384,7 @@ function MoveVerdict({ label, review }: { label: string; review: MoveReview | un
     <p className={`move-verdict verdict-${review.judgement}`}>
       <strong>{label}</strong> <span className="move-verdict-judgement">{VERDICT_LABEL[review.judgement]}.</span>
       {reason}
-      {isError && review.bestSan ? (
+      {isError(review.judgement) && review.bestSan ? (
         <>
           {" "}
           Best was <strong>{review.bestSan}</strong>.

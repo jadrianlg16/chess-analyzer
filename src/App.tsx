@@ -45,10 +45,9 @@ import {
   treeFromPgn,
   type GameTree
 } from "./lib/gameTree";
-import { evaluatePositions, REVIEW_PRESETS, type ReviewPreset } from "./lib/gameAnalysis";
+import { REVIEW_PRESETS, reviewGame, type ReviewPreset } from "./lib/gameAnalysis";
 import { nagForJudgement } from "./lib/nags";
 import {
-  buildReview,
   judgeMove,
   povValue,
   winPercent,
@@ -557,19 +556,22 @@ export default function App() {
       fen: node.fen,
       parentFen: node.parentId ? tree.nodes[node.parentId]?.fen ?? tree.rootFen : tree.rootFen
     }));
-    const fens = Array.from(new Set([tree.rootFen, ...nodes.map((node) => node.fen)]));
-    setAnalyzeProgress({ done: 0, total: fens.length });
+    setAnalyzeProgress({ done: 0, total: nodes.length + 1 });
 
     try {
-      const { evals, cancelled } = await evaluatePositions(fens, REVIEW_PRESETS[reviewPreset].nodes, {
-        onProgress: (done, total) => setAnalyzeProgress({ done, total }),
-        isCancelled: () => analyzeCancelRef.current
-      });
+      const { review, evals, cancelled, positions } = await reviewGame(
+        moves,
+        tree.rootFen,
+        REVIEW_PRESETS[reviewPreset].nodes,
+        {
+          onProgress: (done, total) => setAnalyzeProgress({ done, total }),
+          isCancelled: () => analyzeCancelRef.current
+        }
+      );
 
       for (const [positionFen, evaluation] of evals) evalCacheRef.current.set(positionFen, evaluation);
 
-      // Grade first, then apply NAGs in one pure updater (safe under StrictMode).
-      const review = buildReview(moves, evals);
+      // Apply NAGs in one pure updater (safe under StrictMode).
       setTree((current) => {
         let next = current;
         for (const move of Object.values(review.moves)) {
@@ -577,7 +579,7 @@ export default function App() {
         }
         return next;
       });
-      setReviewState({ review, evals, cancelled, total: fens.length });
+      setReviewState({ review, evals, cancelled, total: positions });
     } catch (error) {
       setReviewError(
         `Game review failed: ${error instanceof Error ? error.message : "the engine stopped working"}.`
