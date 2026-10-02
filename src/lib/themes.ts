@@ -7,7 +7,6 @@ export type ThemeOption<T extends string> = {
   description: string;
 };
 
-export const pieceThemeIds: PieceTheme[] = ["modern", "line", "native"];
 export const boardThemeIds: BoardTheme[] = [
   "tournament",
   "walnut",
