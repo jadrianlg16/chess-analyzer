@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from "react";
-import type { Square } from "chess.js";
+import type { Piece, PieceSymbol, Square } from "chess.js";
 import type { BoardArrow } from "../lib/arrows";
 import { files, ranks, type BoardMap } from "../lib/position";
 import type { BoardTheme, PieceTheme } from "../lib/themes";
@@ -117,7 +117,7 @@ export function ChessBoard({
                 ].join(" ")}
                 type="button"
                 role="gridcell"
-                aria-label={square}
+                aria-label={squareLabel(square, piece)}
                 onClick={() => onSquareClick(square)}
                 onDragOver={(event) => {
                   if (!draggable) return;
@@ -160,6 +160,21 @@ export function ChessBoard({
       </div>
     </div>
   );
+}
+
+const PIECE_NAMES: Record<PieceSymbol, string> = {
+  p: "pawn",
+  n: "knight",
+  b: "bishop",
+  r: "rook",
+  q: "queen",
+  k: "king"
+};
+
+/** What a screen reader announces for a square, e.g. "e4" or "e4, white pawn". */
+function squareLabel(square: Square, piece: Piece | undefined): string {
+  if (!piece) return square;
+  return `${square}, ${piece.color === "w" ? "white" : "black"} ${PIECE_NAMES[piece.type]}`;
 }
 
 function squareCenter(square: Square, orientation: "w" | "b") {
