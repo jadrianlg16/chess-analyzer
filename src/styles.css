@@ -2002,3 +2002,28 @@ textarea {
   padding: 7px 14px;
   width: auto;
 }
+
+.copy-notice {
+  background: var(--ink);
+  border-radius: 8px;
+  bottom: 20px;
+  box-shadow: var(--shadow);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  left: 50%;
+  margin: 0;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 10px 14px;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 50;
+}
+
+.copy-notice.failed {
+  background: var(--danger);
+}
+
+.copy-notice:empty {
+  display: none;
+}

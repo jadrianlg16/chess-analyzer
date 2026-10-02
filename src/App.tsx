@@ -12,6 +12,7 @@ import { PromotionOverlay } from "./components/PromotionOverlay";
 import { SetupPanel, type PaletteSelection } from "./components/SetupPanel";
 import { VariationBanner } from "./components/VariationBanner";
 import { useAppearanceSettings } from "./hooks/useAppearanceSettings";
+import { useCopyNotice } from "./hooks/useCopyNotice";
 import { useGameReview } from "./hooks/useGameReview";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLiveAnalysis } from "./hooks/useLiveAnalysis";
@@ -55,10 +56,6 @@ import { cueForMove, playSound } from "./lib/sound";
 
 type PendingPromotion = { from: Square; to: Square; color: Color };
 
-function copyText(value: string) {
-  void navigator.clipboard?.writeText(value);
-}
-
 /**
  * The analysis board. Owns the game (setup position and move tree) and wires
  * it to the engine hooks; the panels and the board are presentational.
@@ -76,6 +73,7 @@ export default function App() {
   // Engine evaluations by FEN, filled by live analysis and game reviews.
   const evalCacheRef = useRef<Map<string, PositionEval>>(new Map());
   const appearance = useAppearanceSettings();
+  const clipboard = useCopyNotice();
   const {
     variation: activeVariation,
     preview: variationPreview,
@@ -415,7 +413,7 @@ export default function App() {
             onReset={handleReset}
             onClear={handleClear}
             onFlip={flipBoard}
-            onCopyFen={() => copyText(fen)}
+            onCopyFen={() => void clipboard.copy(fen, "FEN")}
           />
 
           <MovePanel
@@ -424,7 +422,7 @@ export default function App() {
             pgnInput={pgnInput}
             onPgnInputChange={setPgnInput}
             onLoadPgn={handleLoadPgn}
-            onCopyPgn={() => copyText(pgn)}
+            onCopyPgn={() => void clipboard.copy(pgn, "PGN")}
             onGoTo={goToNode}
             onPromote={(id) => setTree((current) => promoteToMainline(current, id))}
             onDelete={(id) => {
@@ -444,6 +442,9 @@ export default function App() {
           />
         </aside>
       </div>
+      <p className={`copy-notice ${clipboard.notice?.ok === false ? "failed" : ""}`} role="status">
+        {clipboard.notice?.message ?? ""}
+      </p>
     </main>
   );
 }
