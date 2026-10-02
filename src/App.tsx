@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Chess, type Color, type Move, type Square } from "chess.js";
 import { Activity, Crown } from "lucide-react";
 import { AnalysisPanel } from "./components/AnalysisPanel";
 import { AppearancePanel } from "./components/AppearancePanel";
@@ -12,6 +11,7 @@ import { PromotionOverlay } from "./components/PromotionOverlay";
 import { SetupPanel, type PaletteSelection } from "./components/SetupPanel";
 import { VariationBanner } from "./components/VariationBanner";
 import { useAppearanceSettings } from "./hooks/useAppearanceSettings";
+import { useBoardActions } from "./hooks/useBoardActions";
 import { useCopyNotice } from "./hooks/useCopyNotice";
 import { useGameReview } from "./hooks/useGameReview";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -19,46 +19,25 @@ import { useLiveAnalysis } from "./hooks/useLiveAnalysis";
 import { useMoveGrading } from "./hooks/useMoveGrading";
 import { useResettableState } from "./hooks/useResettableState";
 import { useVariationPreview } from "./hooks/useVariationPreview";
-import type { AnalysisLine } from "./lib/analysis";
 import { boardArrows } from "./lib/arrows";
-import { checkBoardMove, type PromotionPiece } from "./lib/boardMove";
 import { gameStatusOf } from "./lib/gameStatus";
 import {
-  applyMove,
   canStepBackward,
   canStepForward,
   createTree,
   currentFen,
   currentLastMove,
-  deleteFrom,
-  goTo,
   mainlinePgn,
   nodePath,
-  promoteToMainline,
-  stepBackward,
-  stepForward,
   toEnd,
-  toStart,
-  treeFromPgn,
   type GameTree
 } from "./lib/gameTree";
-import {
-  EMPTY_FEN,
-  START_FEN,
-  buildFen,
-  clonePosition,
-  parseFen,
-  validatePositionFen,
-  type PositionState
-} from "./lib/position";
+import { START_FEN, buildFen, parseFen, validatePositionFen, type PositionState } from "./lib/position";
 import type { PositionEval } from "./lib/review";
-import { cueForMove, playSound } from "./lib/sound";
-
-type PendingPromotion = { from: Square; to: Square; color: Color };
 
 /**
  * The analysis board. Owns the game (setup position and move tree) and wires
- * it to the engine hooks; the panels and the board are presentational.
+ * it to the hooks; the panels and the board are presentational.
  */
 export default function App() {
   const [position, setPosition] = useState<PositionState>(() => parseFen(START_FEN));
@@ -66,22 +45,14 @@ export default function App() {
   const [setupMode, setSetupMode] = useState(false);
   const [orientation, setOrientation] = useState<"w" | "b">("w");
   const [paletteSelection, setPaletteSelection] = useState<PaletteSelection>({ color: "w", type: "p" });
-  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
-  const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
   const [depth, setDepth] = useState(14);
   const [multipv, setMultipv] = useState(3);
   // Engine evaluations by FEN, filled by live analysis and game reviews.
   const evalCacheRef = useRef<Map<string, PositionEval>>(new Map());
   const appearance = useAppearanceSettings();
   const clipboard = useCopyNotice();
-  const {
-    variation: activeVariation,
-    preview: variationPreview,
-    view: activeVariationView,
-    select: selectVariation,
-    step: stepVariation,
-    exit: exitVariation
-  } = useVariationPreview();
+  const variation = useVariationPreview();
+  const activeVariation = variation.variation;
 
   const baseFen = useMemo(() => buildFen(position), [position]);
   const treeFen = useMemo(() => currentFen(tree), [tree]);
@@ -94,23 +65,11 @@ export default function App() {
   // Engine arrows are switched on for one position at a time.
   const [showBoardArrows, setShowBoardArrows] = useResettableState(false, fen);
 
-  const review = useGameReview({
-    tree,
-    setTree,
-    evalCache: evalCacheRef,
-    onStart: exitVariation
-  });
-  const { reset: resetReview } = review;
-  const {
-    analysis,
-    live: liveAnalysis,
-    analyze,
-    stop: stopAnalysis,
-    clear: clearAnalysis,
-    showError
-  } = useLiveAnalysis({ fen, validation, paused: review.running, depth, multipv });
+  const review = useGameReview({ tree, setTree, evalCache: evalCacheRef, onStart: variation.exit });
+  const live = useLiveAnalysis({ fen, validation, paused: review.running, depth, multipv });
+  const liveAnalysis = live.live;
   useMoveGrading({
-    analysis,
+    analysis: live.analysis,
     fen,
     enabled: !setupMode && !review.running,
     tree,
@@ -119,183 +78,49 @@ export default function App() {
     evalCache: evalCacheRef
   });
 
-  const game = useMemo(() => {
-    if (setupMode || !validation.ok) return null;
-    try {
-      return new Chess(fen);
-    } catch {
-      return null;
-    }
-  }, [fen, validation.ok, setupMode]);
+  const board = useBoardActions({
+    fen,
+    positionValid: validation.ok,
+    position,
+    setPosition,
+    setupMode,
+    setSetupMode,
+    paletteSelection,
+    setTree,
+    fenInput,
+    pgnInput,
+    showBoardArrows,
+    setShowBoardArrows,
+    hasLines: liveAnalysis.lines.length > 0,
+    soundOn: appearance.soundOn,
+    variation: { active: Boolean(activeVariation), select: variation.select, exit: variation.exit },
+    analysis: { analyze: live.analyze, clear: live.clear, showError: live.showError },
+    resetReview: review.reset
+  });
+  const { pendingPromotion } = board;
+
+  const flipBoard = useCallback(() => setOrientation((current) => (current === "w" ? "b" : "w")), []);
+  useKeyboardShortcuts(!setupMode && !pendingPromotion, {
+    onStart: board.goStart,
+    onPrev: board.goPrev,
+    onNext: board.goNext,
+    onEnd: board.goEnd,
+    onFlip: flipBoard
+  });
 
   const treePosition = useMemo(() => parseFen(treeFen), [treeFen]);
-  const displayPosition = variationPreview?.position ?? (setupMode ? position : treePosition);
-  const displayLastMove = variationPreview?.lastMove ?? (setupMode ? null : currentLastMove(tree));
-  const displayFen = variationPreview?.fen ?? fen;
+  const preview = variation.preview;
+  const displayPosition = preview?.position ?? (setupMode ? position : treePosition);
+  const displayLastMove = preview?.lastMove ?? (setupMode ? null : currentLastMove(tree));
+  const displayFen = preview?.fen ?? fen;
   const gameStatus = useMemo(() => (setupMode ? null : gameStatusOf(displayFen)), [displayFen, setupMode]);
-
-  const legalTargets = useMemo(() => {
-    if (!game || !selectedSquare || setupMode || activeVariation) return [];
-    return (game.moves({ square: selectedSquare, verbose: true }) as Move[]).map((move) => move.to);
-  }, [activeVariation, game, selectedSquare, setupMode]);
-
   const arrows = useMemo(
     () => boardArrows(activeVariation, liveAnalysis.lines, showBoardArrows),
     [activeVariation, liveAnalysis.lines, showBoardArrows]
   );
-
   const ply = useMemo(() => nodePath(tree, tree.currentId).length, [tree]);
   const total = useMemo(() => nodePath(tree, toEnd(tree).currentId).length, [tree]);
-
-  const resetTreeTo = useCallback(
-    (rootFen: string) => {
-      setTree(createTree(rootFen));
-      exitVariation();
-      setSelectedSquare(null);
-      clearAnalysis();
-      resetReview();
-    },
-    [clearAnalysis, exitVariation, resetReview]
-  );
-
-  const navigate = useCallback((fn: (tree: GameTree) => GameTree) => {
-    setTree((current) => fn(current));
-    exitVariation();
-    setSelectedSquare(null);
-  }, [exitVariation]);
-
-  const goStart = useCallback(() => navigate(toStart), [navigate]);
-  const goPrev = useCallback(() => navigate(stepBackward), [navigate]);
-  const goNext = useCallback(() => navigate(stepForward), [navigate]);
-  const goEnd = useCallback(() => navigate(toEnd), [navigate]);
-  const goToNode = useCallback((id: string | null) => navigate((current) => goTo(current, id)), [navigate]);
-  const flipBoard = useCallback(() => setOrientation((current) => (current === "w" ? "b" : "w")), []);
-
-  useKeyboardShortcuts(!setupMode && !pendingPromotion, {
-    onStart: goStart,
-    onPrev: goPrev,
-    onNext: goNext,
-    onEnd: goEnd,
-    onFlip: flipBoard
-  });
-
-  const playMove = useCallback(
-    (from: Square, to: Square, promotion?: PromotionPiece) => {
-      if (setupMode || activeVariation) return;
-      const move = checkBoardMove(fen, from, to, promotion);
-      if (move.kind === "unavailable") return;
-      setSelectedSquare(null);
-      if (move.kind === "illegal") return;
-      if (move.kind === "needs-promotion") {
-        setPendingPromotion({ from, to, color: move.color });
-        return;
-      }
-
-      setTree((current) => applyMove(current, { from, to, promotion }));
-      exitVariation();
-      setPendingPromotion(null);
-      clearAnalysis();
-      if (appearance.soundOn) playSound(cueForMove(move.san, move.flags));
-    },
-    [activeVariation, appearance.soundOn, clearAnalysis, exitVariation, fen, setupMode]
-  );
-
-  function handleSquareClick(square: Square) {
-    if (activeVariation || pendingPromotion) return;
-
-    if (setupMode) {
-      const next = clonePosition(position);
-      if (paletteSelection === "erase") {
-        delete next.board[square];
-      } else {
-        next.board[square] = { ...paletteSelection };
-      }
-      setPosition(next);
-      setSelectedSquare(null);
-      resetTreeTo(buildFen(next));
-      return;
-    }
-
-    if (!game) return;
-
-    if (selectedSquare && legalTargets.includes(square)) {
-      playMove(selectedSquare, square);
-      return;
-    }
-
-    const piece = game.get(square);
-    setSelectedSquare(piece && piece.color === game.turn() ? square : null);
-  }
-
-  function handleMetaChange(meta: PositionState["meta"]) {
-    const next = { ...position, meta };
-    setPosition(next);
-    resetTreeTo(buildFen(next));
-  }
-
-  function handleSetupModeChange(active: boolean) {
-    setSetupMode(active);
-    setSelectedSquare(null);
-    if (!active) resetTreeTo(buildFen(position));
-  }
-
-  function handleLoadFen() {
-    const result = validatePositionFen(fenInput);
-    if (!result.ok) {
-      showError(result.error || "Invalid FEN");
-      return;
-    }
-    setPosition(parseFen(fenInput));
-    resetTreeTo(fenInput);
-  }
-
-  function handleLoadPgn() {
-    try {
-      const loaded = treeFromPgn(pgnInput);
-      setPosition(parseFen(loaded.rootFen));
-      setTree(loaded);
-      setSelectedSquare(null);
-      exitVariation();
-      clearAnalysis();
-      resetReview();
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Invalid PGN");
-    }
-  }
-
-  function handleReset() {
-    setPosition(parseFen(START_FEN));
-    resetTreeTo(START_FEN);
-    setSetupMode(false);
-  }
-
-  function handleClear() {
-    setPosition(parseFen(EMPTY_FEN));
-    setSetupMode(true);
-    resetTreeTo(EMPTY_FEN);
-  }
-
-  function handleAnalyze() {
-    if (!validation.ok) return;
-    exitVariation();
-    setSelectedSquare(null);
-    setShowBoardArrows(true);
-    analyze();
-  }
-
-  function handleToggleBoardArrows() {
-    if (!validation.ok) return;
-    if (!showBoardArrows && !liveAnalysis.lines.length) analyze();
-    setShowBoardArrows((current) => !current);
-  }
-
-  function handleSelectVariation(line: AnalysisLine, plyIndex: number) {
-    if (!line.uciMoves.length || !validation.ok) return;
-    setSelectedSquare(null);
-    selectVariation(fen, line, plyIndex);
-  }
-
-  const canInteract = !setupMode && !activeVariation && Boolean(game);
+  const canInteract = !setupMode && !activeVariation && Boolean(board.game);
 
   return (
     <main className="app-shell">
@@ -320,7 +145,7 @@ export default function App() {
               multipv={activeVariation.multipv}
               ply={activeVariation.ply}
               total={activeVariation.uciMoves.length}
-              playedSans={variationPreview?.playedSans ?? []}
+              playedSans={preview?.playedSans ?? []}
             />
           ) : null}
           <div className="board-with-eval">
@@ -331,20 +156,20 @@ export default function App() {
                 orientation={orientation}
                 boardTheme={appearance.boardTheme}
                 pieceTheme={appearance.pieceTheme}
-                selectedSquare={activeVariation ? null : selectedSquare}
-                legalTargets={legalTargets}
+                selectedSquare={activeVariation ? null : board.selectedSquare}
+                legalTargets={board.legalTargets}
                 lastMove={displayLastMove}
                 arrows={arrows}
                 draggable={canInteract}
-                onSquareClick={handleSquareClick}
-                onMove={playMove}
+                onSquareClick={board.clickSquare}
+                onMove={board.playMove}
               />
               {pendingPromotion ? (
                 <PromotionOverlay
                   color={pendingPromotion.color}
                   pieceTheme={appearance.pieceTheme}
-                  onSelect={(piece) => playMove(pendingPromotion.from, pendingPromotion.to, piece)}
-                  onCancel={() => setPendingPromotion(null)}
+                  onSelect={(piece) => board.playMove(pendingPromotion.from, pendingPromotion.to, piece)}
+                  onCancel={board.cancelPromotion}
                 />
               ) : null}
             </div>
@@ -355,10 +180,10 @@ export default function App() {
               canBack={canStepBackward(tree)}
               canForward={canStepForward(tree)}
               atStart={tree.currentId === null}
-              onStart={goStart}
-              onPrev={goPrev}
-              onNext={goNext}
-              onEnd={goEnd}
+              onStart={board.goStart}
+              onPrev={board.goPrev}
+              onNext={board.goNext}
+              onEnd={board.goEnd}
               onFlip={flipBoard}
               ply={ply}
               total={total}
@@ -375,17 +200,17 @@ export default function App() {
             fen={fen}
             depth={depth}
             multipv={multipv}
-            activeVariation={activeVariationView}
+            activeVariation={variation.view}
             showBoardArrows={showBoardArrows}
             canAnalyze={validation.ok}
             onDepthChange={setDepth}
             onMultipvChange={setMultipv}
-            onAnalyze={handleAnalyze}
-            onStop={stopAnalysis}
-            onToggleBoardArrows={handleToggleBoardArrows}
-            onSelectLine={handleSelectVariation}
-            onStepVariation={stepVariation}
-            onExitVariation={exitVariation}
+            onAnalyze={board.analyzeNow}
+            onStop={live.stop}
+            onToggleBoardArrows={board.toggleArrows}
+            onSelectLine={board.previewLine}
+            onStepVariation={variation.step}
+            onExitVariation={variation.exit}
           />
 
           <AppearancePanel
@@ -405,13 +230,13 @@ export default function App() {
             fenInput={fenInput}
             validation={validation}
             pieceTheme={appearance.pieceTheme}
-            onModeChange={handleSetupModeChange}
+            onModeChange={board.changeSetupMode}
             onSelectionChange={setPaletteSelection}
             onFenInputChange={setFenInput}
-            onLoadFen={handleLoadFen}
-            onMetaChange={handleMetaChange}
-            onReset={handleReset}
-            onClear={handleClear}
+            onLoadFen={board.loadFen}
+            onMetaChange={board.changeMeta}
+            onReset={board.resetToStart}
+            onClear={board.clearBoard}
             onFlip={flipBoard}
             onCopyFen={() => void clipboard.copy(fen, "FEN")}
           />
@@ -421,15 +246,11 @@ export default function App() {
             pgn={pgn}
             pgnInput={pgnInput}
             onPgnInputChange={setPgnInput}
-            onLoadPgn={handleLoadPgn}
+            onLoadPgn={board.loadPgn}
             onCopyPgn={() => void clipboard.copy(pgn, "PGN")}
-            onGoTo={goToNode}
-            onPromote={(id) => setTree((current) => promoteToMainline(current, id))}
-            onDelete={(id) => {
-              setTree((current) => deleteFrom(current, id));
-              exitVariation();
-              setSelectedSquare(null);
-            }}
+            onGoTo={board.goToNode}
+            onPromote={board.promoteLine}
+            onDelete={board.deleteLine}
             onAnalyzeGame={review.start}
             onCancelAnalyzeGame={review.cancel}
             analyzing={review.running}
