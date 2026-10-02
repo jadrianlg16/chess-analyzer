@@ -52,7 +52,7 @@ Play through or set up a position and the engine analyzes it as you go. Load a P
 | Web Worker | Searches run off the main thread; the app talks UCI to the worker over `postMessage`. |
 | React hooks per concern | `App.tsx` owns the game (setup position and move tree); live analysis, game review, move grading, line preview, appearance settings and keyboard shortcuts each live in their own hook under `src/hooks/`. Chess logic stays in plain functions under `src/lib/`, so it is tested without React. |
 | Vitest | Fast unit tests for the engine protocol, grading, FEN validation and the move tree, with no browser needed. |
-| ESLint (typescript-eslint, React hooks rules) | `npm run lint` fails on any warning. It includes the React Compiler checks from `eslint-plugin-react-hooks` 7, such as no `setState` calls in effects; the one deliberate exception is explained in `useLiveAnalysis.ts`. |
+| ESLint (typescript-eslint, React hooks rules), Prettier | `npm run lint` fails on any warning. It includes the React Compiler checks from `eslint-plugin-react-hooks` 7, such as no `setState` calls in effects; the one deliberate exception is explained in `useLiveAnalysis.ts`. Prettier keeps the formatting consistent (120 columns, double quotes). |
 | nginx (Docker) | Serves the static build as an unprivileged user, with a Content-Security-Policy that allows only the app's own files (plus `'wasm-unsafe-eval'` for the engine) and the usual hardening headers. |
 
 ```mermaid
@@ -74,10 +74,11 @@ src/
 ├── App.tsx                  Setup position and move tree, wired to the hooks and panels
 ├── styles.css
 ├── hooks/
+│   ├── useBoardActions.ts   Moves, promotion, navigation, setup edits, FEN/PGN loading
 │   ├── useLiveAnalysis.ts   Debounced live analysis of the board position
 │   ├── useGameReview.ts     Review runs, progress, summary and graph data
 │   ├── useMoveGrading.ts    ?!, ? and ?? marks while exploring
-│   └── useVariationPreview.ts, useAppearanceSettings.ts,
+│   └── useVariationPreview.ts, useAppearanceSettings.ts, useCopyNotice.ts,
 │       useKeyboardShortcuts.ts, useResettableState.ts
 ├── lib/
 │   ├── engine.ts            UCI controller: one search at a time, crash and hang recovery
@@ -88,8 +89,9 @@ src/
 │   ├── gameTree.ts          Move tree with variations; PGN import and export
 │   ├── boardMove.ts         Legality and promotion check for a move made on the board
 │   ├── evaluation.ts        Scores from White's side for the eval bar and labels
+│   ├── reviewTree.ts        Applies a review to the move tree; grades moves while exploring
 │   ├── storage.ts           localStorage access that falls back when the browser blocks it
-│   └── arrows.ts, gameStatus.ts, variation.ts, nags.ts, sound.ts, themes.ts
+│   └── arrows.ts, clipboard.ts, gameStatus.ts, variation.ts, nags.ts, sound.ts, themes.ts
 └── components/
     ├── ChessBoard.tsx       Click and drag moves, legal targets, SVG arrows
     ├── AnalysisPanel.tsx    Depth, line count, engine lines, line preview
@@ -139,14 +141,15 @@ The image runs the same `npm run build` (type check included) and serves `dist/`
 ## Tests and CI
 
 ```bash
-npm test           # Vitest, once
-npm run lint       # ESLint, fails on any warning
-npm run typecheck  # tsc for the app, the tests and the Vite config
+npm test              # Vitest, once
+npm run lint          # ESLint, fails on any warning
+npm run format:check  # Prettier; npm run format rewrites the files
+npm run typecheck     # tsc for the app, the tests and the Vite config
 ```
 
-The suites cover the UCI parser and engine controller (serialized searches, superseded searches, crash and hang recovery, search timeouts, stop, dispose), the live analysis client (stale updates, crash reporting), the review pipeline against the fake Stockfish (second look, cancellation), the grading math (winning chances, accuracy, mate rules), FEN validation and round trips against valid and invalid fixture FENs, the move tree (variations, promotion, deletion, PGN import and export) and the board helpers. Nothing touches the network or needs a browser. There are no browser or UI tests yet; the UI is checked by hand.
+The suites cover the UCI parser and engine controller (serialized searches, superseded searches, crash and hang recovery, search timeouts, stop, dispose), the live analysis client (stale updates, crash reporting), the review pipeline against the fake Stockfish (second look, cancellation), the grading math (winning chances, accuracy, mate rules), FEN validation and round trips against valid and invalid fixture FENs, the move tree (variations, promotion, deletion, PGN import and export), the board helpers, and the logic behind the review and move-grading hooks (in `src/lib/reviewTree.ts`, run against the fake Stockfish). Nothing touches the network or needs a browser. There are no browser or component tests yet; the UI is checked by hand.
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm ci`, lint, type check, tests and build on Node 20 and 22 for pushes to `main` and for pull requests, then checks that the build left no tracked file modified. The workflow is committed but has not run on GitHub yet.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm ci`, lint, format check, type check, tests and build on Node 20 and 22 for pushes to `main` and for pull requests, then checks that the build left no tracked file modified. The workflow is committed but has not run on GitHub yet.
 
 ## Configuration
 
