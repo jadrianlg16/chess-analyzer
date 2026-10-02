@@ -56,6 +56,11 @@ export const pieceGlyphs: Record<Color, Record<PieceSymbol, string>> = {
   }
 };
 
+/** The side to move in a FEN: "w" unless its second field says "b". */
+export function sideToMove(fen: string): Color {
+  return fen.split(/\s+/)[1] === "b" ? "b" : "w";
+}
+
 export function squareAt(fileIndex: number, rank: number): Square {
   return `${files[fileIndex]}${rank}` as Square;
 }

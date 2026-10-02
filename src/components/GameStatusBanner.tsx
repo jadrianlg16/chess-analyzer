@@ -1,10 +1,5 @@
 import { AlertTriangle, Flag, Handshake, Swords } from "lucide-react";
-
-export type GameStatus =
-  | { type: "checkmate"; winner: "w" | "b" }
-  | { type: "stalemate" }
-  | { type: "draw"; reason: string }
-  | { type: "check" };
+import type { GameStatus } from "../lib/gameStatus";
 
 type GameStatusBannerProps = {
   status: GameStatus;

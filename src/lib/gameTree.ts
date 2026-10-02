@@ -256,9 +256,20 @@ export function treeFromPgn(pgn: string): { tree: GameTree; endAtTip: boolean } 
   return { tree, endAtTip: true };
 }
 
-/** Serialize the main line to a simple SAN move-number string. */
+/** The main line as SAN moves, from the first move to the last. */
 export function mainlineSan(tree: GameTree): string[] {
   return mainlineNodes(tree).map((node) => node.san);
+}
+
+/** PGN of the main line (with SetUp/FEN headers for a custom start); empty if it can't be replayed. */
+export function mainlinePgn(tree: GameTree): string {
+  try {
+    const chess = new Chess(tree.rootFen);
+    for (const san of mainlineSan(tree)) chess.move(san);
+    return chess.pgn({ newline: "\n" });
+  } catch {
+    return "";
+  }
 }
 
 /** The nodes of the main line in order, from the first move to the last. */

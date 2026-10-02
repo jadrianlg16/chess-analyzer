@@ -1,14 +1,9 @@
 import { useState, type DragEvent } from "react";
 import type { Square } from "chess.js";
+import type { BoardArrow } from "../lib/arrows";
 import { files, ranks, type BoardMap } from "../lib/position";
 import type { BoardTheme, PieceTheme } from "../lib/themes";
 import { PieceIcon } from "./PieceIcon";
-
-export type BoardArrow = {
-  from: Square;
-  to: Square;
-  tone: "best" | "line";
-};
 
 type ChessBoardProps = {
   board: BoardMap;

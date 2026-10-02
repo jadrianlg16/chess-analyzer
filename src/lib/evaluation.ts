@@ -1,4 +1,5 @@
 import type { AnalysisLine, EngineScore } from "./analysis";
+import { sideToMove } from "./position";
 
 type EvaluationLeader = "white" | "black" | "equal" | "unknown";
 type EvaluationPlacement = "top" | "middle" | "bottom";
@@ -14,10 +15,6 @@ export type EvaluationDisplay = {
 
 const EQUAL_THRESHOLD_CP = 20;
 const BAR_CAP_CP = 800;
-
-function sideToMove(fen: string): "w" | "b" {
-  return fen.split(/\s+/)[1] === "b" ? "b" : "w";
-}
 
 export function scoreToWhitePerspective(score: EngineScore, fen: string): EngineScore {
   const multiplier = sideToMove(fen) === "w" ? 1 : -1;
