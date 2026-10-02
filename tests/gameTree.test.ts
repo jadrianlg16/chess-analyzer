@@ -107,7 +107,7 @@ describe("PGN", () => {
   const scholar = "1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0";
 
   it("loads the main line and ends on the last move", () => {
-    const { tree } = treeFromPgn(scholar);
+    const tree = treeFromPgn(scholar);
     expect(mainlineSan(tree)).toEqual(["e4", "e5", "Bc4", "Nc6", "Qh5", "Nf6", "Qxf7#"]);
     expect(tree.rootFen).toBe(START_FEN);
     expect(tree.currentId).toBe(mainlineNodes(tree).at(-1)?.id);
@@ -115,7 +115,14 @@ describe("PGN", () => {
 
   it("uses the FEN header as the starting position", () => {
     const fen = "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1";
-    const { tree } = treeFromPgn(`[SetUp "1"]\n[FEN "${fen}"]\n\n1. e4 Kd7 *`);
+    const tree = treeFromPgn(`[SetUp "1"]\n[FEN "${fen}"]\n\n1. e4 Kd7 *`);
+    expect(tree.rootFen).toBe(fen);
+    expect(mainlineSan(tree)).toEqual(["e4", "Kd7"]);
+  });
+
+  it("starts from a FEN tag in another case and without SetUp, as chess.js does", () => {
+    const fen = "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1";
+    const tree = treeFromPgn(`[Fen "${fen}"]\n\n1. e4 Kd7 *`);
     expect(tree.rootFen).toBe(fen);
     expect(mainlineSan(tree)).toEqual(["e4", "Kd7"]);
   });
@@ -131,10 +138,10 @@ describe("PGN", () => {
   });
 
   it("writes the main line back out as PGN", () => {
-    const { tree } = treeFromPgn(scholar);
+    const tree = treeFromPgn(scholar);
     const pgn = mainlinePgn(tree);
     expect(pgn).toContain("4. Qxf7#");
-    expect(mainlineSan(treeFromPgn(pgn).tree)).toEqual(mainlineSan(tree));
+    expect(mainlineSan(treeFromPgn(pgn))).toEqual(mainlineSan(tree));
     expect(mainlinePgn(createTree())).not.toMatch(/1\./);
   });
 });

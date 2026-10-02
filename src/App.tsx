@@ -253,7 +253,7 @@ export default function App() {
 
   function handleLoadPgn() {
     try {
-      const { tree: loaded } = treeFromPgn(pgnInput);
+      const loaded = treeFromPgn(pgnInput);
       setPosition(parseFen(loaded.rootFen));
       setTree(loaded);
       setSelectedSquare(null);

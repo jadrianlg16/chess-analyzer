@@ -1,4 +1,4 @@
-import { Chess, DEFAULT_POSITION, type Square } from "chess.js";
+import { Chess, type Square } from "chess.js";
 import { START_FEN, validatePositionFen } from "./position";
 
 /**
@@ -234,20 +234,21 @@ export function promoteToMainline(tree: GameTree, id: string): GameTree {
 }
 
 /**
- * Build a tree from a PGN string. Loads the main line; if the PGN starts from a
- * custom position (FEN/SetUp headers) that becomes the root, after the same
- * validation as a FEN typed into the setup panel.
+ * Build a tree from a PGN string, positioned on its last move. Loads the main
+ * line; a custom starting position (a FEN tag) becomes the root, after the
+ * same validation as a FEN typed into the setup panel.
  */
-export function treeFromPgn(pgn: string): { tree: GameTree; endAtTip: boolean } {
+export function treeFromPgn(pgn: string): GameTree {
   const chess = new Chess();
   chess.loadPgn(pgn, { strict: false });
 
-  const header = chess.header();
-  const rootFen = header.FEN && header.SetUp === "1" ? header.FEN : header.FEN ?? DEFAULT_POSITION;
+  // The position chess.js actually started from. Its lenient parser accepts a
+  // FEN tag in any case and without [SetUp "1"], so the tags can't be trusted.
+  const verbose = chess.history({ verbose: true });
+  const rootFen = verbose[0]?.before ?? chess.fen();
   const root = validatePositionFen(rootFen);
   if (!root.ok) throw new Error(`The PGN's starting position is invalid: ${root.error}`);
 
-  const verbose = chess.history({ verbose: true });
   let tree = createTree(rootFen);
   for (const mv of verbose) {
     tree = applyMove(tree, {
@@ -256,7 +257,7 @@ export function treeFromPgn(pgn: string): { tree: GameTree; endAtTip: boolean } 
       promotion: mv.promotion as MoveInput["promotion"]
     });
   }
-  return { tree, endAtTip: true };
+  return tree;
 }
 
 /** The main line as SAN moves, from the first move to the last. */
