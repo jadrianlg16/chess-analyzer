@@ -30,13 +30,13 @@ Play through or set up a position and the engine analyzes it as you go. Load a P
 - **Live engine analysis.** Eval bar from White's side (forced mates shown as `+M3` or `-M2`), 1 to 3 lines (MultiPV), depth 6 to 20, and optional arrows for each line's first move. Click any move in a line to step through it on the board.
 - **Move tree.** Playing a different move from an earlier position starts a variation. Right-click a move to promote it to the main line or delete from there. While you explore, a move gets a `?!`, `?` or `??` mark once the engine has finished the positions before and after it.
 - **Game review.** Grades every main-line move as best, good, inaccuracy, mistake or blunder, shows the better move for each error, per-side accuracy and error counts, and a clickable winning-chances graph. Quick, Standard and Deep budgets; a review can be stopped part-way.
-- **Position setup.** Piece palette, side to move, castling rights, en passant and move counters. FEN import with validation that also rejects castling rights the board can't back up (Stockfish can hang on them) and positions where the side not to move is in check. FEN and PGN copy, PGN import.
+- **Position setup.** Piece palette, side to move, castling rights, en passant and move counters. FEN import with validation that also rejects castling rights the board can't back up (Stockfish can hang on them) and positions where the side not to move is in check; a PGN's `[FEN]` starting position gets the same checks. FEN and PGN copy, PGN import.
 - **Appearance.** Six board themes, three piece sets and synthesized move sounds, remembered between visits when the browser allows local storage.
 - **Accessible board.** Squares are buttons labeled with the square and piece ("e4, white pawn").
 
 ## Engineering highlights
 
-- **A UCI controller that sends nothing but `stop` during a search** ([`src/lib/engine.ts`](src/lib/engine.ts)). The single-threaded WASM build crashes (`RuntimeError: unreachable`) on a burst of commands mid-search, so `UciEngine` sends only `stop` while a search runs and waits for `bestmove`. A newer search stops the running one and skips queued ones. A crashed worker is replaced and the search retried up to twice; one ignoring `stop` for 3 s is replaced too. Failures carry a typed `code`.
+- **A UCI controller that sends nothing but `stop` during a search** ([`src/lib/engine.ts`](src/lib/engine.ts)). The single-threaded WASM build crashes (`RuntimeError: unreachable`) on a burst of commands mid-search, so `UciEngine` sends only `stop` while a search runs and waits for `bestmove`. A newer search stops the running one and skips queued ones. A crashed worker is replaced and the search retried up to twice; so is one that ignores `stop` for 3 s or says nothing for 10 s after `go`. Failures carry a typed `code`.
 - **Tests against a fake engine that behaves like the real one** ([`tests/fakeStockfish.ts`](tests/fakeStockfish.ts)). The scripted worker crashes on any command other than `stop` or `isready` during a search, and it records each such command as a violation. Options make it crash on `go` or ignore `stop`. The engine tests assert that no violations happen, and they cover recovery, giving up after repeated crashes, and recovering on the next search.
 - **Grading on winning chances, not raw centipawns** ([`src/lib/review.ts`](src/lib/review.ts)). Scores go through Lichess's logistic fit (capped at ±10 pawns) to winning chances on a −1…1 scale. A move is an inaccuracy, mistake or blunder when it drops them by at least 0.1, 0.2 or 0.3. Per-move accuracy uses Lichess's formula. Forced mates have their own rules (allowing one, missing one), and playing the engine's own best move is never an error.
 - **A second look before calling a move an error** ([`src/lib/gameAnalysis.ts`](src/lib/gameAnalysis.ts)). Comparing two separate searches can punish a good move because of the horizon effect. So every flagged move is searched again from the position before it with `searchmoves`, on the same budget, and the higher of the two scores for the move is used. Budgets are node counts (60k, 250k, 1M), not depths, so the work per position is bounded and a re-run gives the same result.
@@ -46,14 +46,14 @@ Play through or set up a position and the engine analyzes it as you go. Load a P
 
 | Piece | Why |
 | --- | --- |
-| React 18, TypeScript (`strict`), Vite 5 | A single-page app with static output. `npm run build` type-checks the app, the tests and the Vite config before bundling. |
+| React 18, TypeScript (`strict`), Vite 6 | A single-page app with static output. `npm run build` type-checks the app, the tests and the Vite config before bundling. |
 | [chess.js](https://github.com/jhlywa/chess.js) 1.4 | Move legality, SAN, FEN and PGN, so the app doesn't reimplement the rules. |
 | Stockfish 18 lite, single-threaded ([`stockfish`](https://github.com/nmrugg/stockfish.js) npm package) | The lite build is about 7 MB of WASM, against about 113 MB for the full one. The single-threaded variant needs no `SharedArrayBuffer`, so the page needs no cross-origin isolation (COOP/COEP headers) and runs from any static host or inside an iframe. The multi-threaded builds need both. |
 | Web Worker | Searches run off the main thread; the app talks UCI to the worker over `postMessage`. |
 | React hooks per concern | `App.tsx` owns the game (setup position and move tree); live analysis, game review, move grading, line preview, appearance settings and keyboard shortcuts each live in their own hook under `src/hooks/`. Chess logic stays in plain functions under `src/lib/`, so it is tested without React. |
 | Vitest | Fast unit tests for the engine protocol, grading, FEN validation and the move tree, with no browser needed. |
 | ESLint (typescript-eslint, React hooks rules) | `npm run lint` fails on any warning. It includes the React Compiler checks from `eslint-plugin-react-hooks` 7, such as no `setState` calls in effects; the one deliberate exception is explained in `useLiveAnalysis.ts`. |
-| nginx (Docker) | Serves the static build as an unprivileged user. |
+| nginx (Docker) | Serves the static build as an unprivileged user, with a Content-Security-Policy that allows only the app's own files (plus `'wasm-unsafe-eval'` for the engine) and the usual hardening headers. |
 
 ```mermaid
 flowchart LR
@@ -134,7 +134,7 @@ docker build -t chess-analyzer .
 docker run --rm -p 5016:80 chess-analyzer    # http://localhost:5016
 ```
 
-The image runs the same `npm run build` (type check included) and serves `dist/` with nginx on port 80, as the unprivileged `nginx` user.
+The image runs the same `npm run build` (type check included) and serves `dist/` with nginx on port 80, as the unprivileged `nginx` user. [`nginx.conf`](nginx.conf) sets the security headers; the policy only allows the page to be framed by itself.
 
 ## Tests and CI
 
@@ -144,7 +144,7 @@ npm run lint       # ESLint, fails on any warning
 npm run typecheck  # tsc for the app, the tests and the Vite config
 ```
 
-The suites cover the UCI parser and engine controller (serialized searches, superseded searches, crash and hang recovery, stop, dispose), the live analysis client (stale updates, crash reporting), the review pipeline against the fake Stockfish (second look, cancellation), the grading math (winning chances, accuracy, mate rules), FEN validation and round trips against valid and invalid fixture FENs, the move tree (variations, promotion, deletion, PGN import and export) and the board helpers. Nothing touches the network or needs a browser. There are no browser or UI tests yet; the UI is checked by hand.
+The suites cover the UCI parser and engine controller (serialized searches, superseded searches, crash and hang recovery, search timeouts, stop, dispose), the live analysis client (stale updates, crash reporting), the review pipeline against the fake Stockfish (second look, cancellation), the grading math (winning chances, accuracy, mate rules), FEN validation and round trips against valid and invalid fixture FENs, the move tree (variations, promotion, deletion, PGN import and export) and the board helpers. Nothing touches the network or needs a browser. There are no browser or UI tests yet; the UI is checked by hand.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm ci`, lint, type check, tests and build on Node 20 and 22 for pushes to `main` and for pull requests, then checks that the build left no tracked file modified. The workflow is committed but has not run on GitHub yet.
 
@@ -163,7 +163,6 @@ The live demo is served this way, from `/demos/chess/`. In Git Bash on Windows, 
 - **Engine strength.** The lite build is weaker than full Stockfish, and it searches on a single thread, so it is also slower than native, multi-threaded Stockfish. Depth tops out at 20 in the UI.
 - **PGN.** Import keeps only the main line; variations and comments in the file are dropped. Export and game review cover the main line only.
 - **Nothing is saved.** A reload starts a new game; only the appearance settings are kept, and not even those when the browser blocks site data.
-- **Toolchain advisories.** `npm audit` reports advisories against the Vite 5 dev server (and its esbuild) and Vitest 2. They concern the local dev server and test runner, not the static build (`npm audit --omit=dev` reports none); fixing them means moving to Vite 6+ and Vitest 4+.
 
 ## License
 
