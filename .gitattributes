@@ -1,0 +1,4 @@
+# The engine files are byte-for-byte copies of node_modules/stockfish, refreshed
+# by scripts/copy-stockfish.mjs on every dev and build run. Converting their line
+# endings would make every run show them as modified.
+public/vendor/stockfish/* -text
