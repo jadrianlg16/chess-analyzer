@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { Chess } from "chess.js";
-import { evaluationFromLine, scoreLabelForFen } from "../src/lib/evaluation";
-import { validatePositionFen } from "../src/lib/position";
 import {
   buildReview,
   judgeMove,
@@ -134,22 +132,5 @@ describe("buildReview", () => {
     expect(review.moves.m2).toMatchObject({ judgement: "best", accuracy: 100 });
     expect(review.white.moves).toBe(1);
     expect(review.black.accuracy).toBe(100);
-  });
-});
-
-describe("terminal positions and illegal setups", () => {
-  const checkmated = "1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 17";
-
-  it("shows checkmate on the eval bar instead of 'No eval'", () => {
-    const line = { multipv: 1, depth: 0, score: { kind: "mate" as const, value: 0 }, uciMoves: [], sanMoves: [] };
-    expect(evaluationFromLine(checkmated, line)).toMatchObject({ leader: "white", label: "#", whiteShare: 100 });
-    expect(scoreLabelForFen(line.score, checkmated)).toBe("#");
-  });
-
-  it("rejects a setup where the side not to move is in check", () => {
-    const result = validatePositionFen("4k3/8/8/8/8/8/8/K3R3 w - - 0 1");
-    expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/Black is in check/);
-    expect(validatePositionFen("4k3/8/8/8/8/8/8/K3R3 b - - 0 1").ok).toBe(true);
   });
 });

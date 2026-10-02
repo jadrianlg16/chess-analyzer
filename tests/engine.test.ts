@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EngineError, parseUciInfo, UciEngine, type UciInfo } from "../src/lib/engine";
 import { fakeFactory, sleep, waitFor } from "./fakeStockfish";
+import { engineOutputCases } from "./fixtures/engineOutputCases";
 
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const AFTER_E4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
@@ -29,6 +30,11 @@ describe("parseUciInfo", () => {
   it("keeps terminal lines that have no pv", () => {
     expect(parseUciInfo("info depth 0 score mate 0")).toMatchObject({ depth: 0, score: { kind: "mate", value: 0 }, pv: [] });
     expect(parseUciInfo("info depth 0 score cp 0")).toMatchObject({ score: { kind: "cp", value: 0 }, pv: [] });
+  });
+
+  it.each(engineOutputCases)("parses $name", ({ output, expected }) => {
+    const parsed = output.split("\n").map(parseUciInfo).filter((info) => info !== null);
+    expect(parsed).toEqual(expected);
   });
 
   it("ignores engine chatter", () => {
