@@ -156,6 +156,34 @@ export function normalizeEnPassant(value: string): string {
   return /^[a-h][36]$/.test(trimmed) ? trimmed : "-";
 }
 
+const CASTLING_RULES: Record<keyof CastlingRights, { color: Color; king: Square; rook: Square; label: string }> = {
+  K: { color: "w", king: "e1", rook: "h1", label: "White can't castle kingside" },
+  Q: { color: "w", king: "e1", rook: "a1", label: "White can't castle queenside" },
+  k: { color: "b", king: "e8", rook: "h8", label: "Black can't castle kingside" },
+  q: { color: "b", king: "e8", rook: "a8", label: "Black can't castle queenside" }
+};
+
+/** The first castling right the board can't support (king or rook off its home square), if any. */
+function unsupportedCastlingRight(chess: Chess, castling: string): string | null {
+  for (const right of castling) {
+    const rule = CASTLING_RULES[right as keyof CastlingRights];
+    if (!rule) continue;
+    const king = chess.get(rule.king);
+    const rook = chess.get(rule.rook);
+    if (king?.type !== "k" || king.color !== rule.color || rook?.type !== "r" || rook.color !== rule.color) {
+      return `${rule.label} without its king on ${rule.king} and a rook on ${rule.rook}.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Check a FEN before it reaches the board or the engine. On top of chess.js's
+ * syntax and king checks, it rejects two setups Stockfish can't analyze: a
+ * castling right without the king and rook on their home squares (the engine
+ * can hang without ever answering), and the side that just moved still being
+ * in check (the engine returns no lines).
+ */
 export function validatePositionFen(fen: string): { ok: boolean; error?: string } {
   const result = validateFen(fen);
   if (!result.ok) {
@@ -163,10 +191,11 @@ export function validatePositionFen(fen: string): { ok: boolean; error?: string 
   }
 
   try {
-    new Chess(fen);
-    // Stockfish returns no analysis at all when the side that just moved is
-    // still in check, so reject that setup here with a clear reason.
+    const chess = new Chess(fen);
     const fields = fen.trim().split(/\s+/);
+    const castlingError = unsupportedCastlingRight(chess, fields[2] ?? "-");
+    if (castlingError) return { ok: false, error: castlingError };
+
     const flipped = [fields[0], fields[1] === "w" ? "b" : "w", fields[2] ?? "-", "-", "0", "1"].join(" ");
     if (new Chess(flipped, { skipValidation: true }).isCheck()) {
       const waiting = fields[1] === "w" ? "Black" : "White";
