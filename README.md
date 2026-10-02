@@ -163,7 +163,7 @@ The live demo is served this way, from `/demos/chess/`. In Git Bash on Windows, 
 - **Engine strength.** The lite build is weaker than full Stockfish, and it searches on a single thread, so it is also slower than native, multi-threaded Stockfish. Depth tops out at 20 in the UI.
 - **PGN.** Import keeps only the main line; variations and comments in the file are dropped. Export and game review cover the main line only.
 - **Nothing is saved.** A reload starts a new game; only the appearance settings are kept, and not even those when the browser blocks site data.
-- **Toolchain advisories.** `npm audit` reports advisories against the Vite 5 dev server (and its esbuild) and Vitest 2. They concern the local dev server and test runner, not the static build; fixing them means moving to Vite 6+ and Vitest 4+.
+- **Toolchain advisories.** `npm audit` reports advisories against the Vite 5 dev server (and its esbuild) and Vitest 2. They concern the local dev server and test runner, not the static build (`npm audit --omit=dev` reports none); fixing them means moving to Vite 6+ and Vitest 4+.
 
 ## License
 
