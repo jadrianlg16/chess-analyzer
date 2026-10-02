@@ -30,7 +30,7 @@ Play through or set up a position and the engine analyzes it as you go. Load a P
 - **Live engine analysis.** Eval bar from White's side (forced mates shown as `+M3` or `-M2`), 1 to 3 lines (MultiPV), depth 6 to 20, and optional arrows for each line's first move. Click any move in a line to step through it on the board.
 - **Move tree.** Playing a different move from an earlier position starts a variation. Right-click a move to promote it to the main line or delete from there. While you explore, a move gets a `?!`, `?` or `??` mark once the engine has finished the positions before and after it.
 - **Game review.** Grades every main-line move as best, good, inaccuracy, mistake or blunder, shows the better move for each error, per-side accuracy and error counts, and a clickable winning-chances graph. Quick, Standard and Deep budgets; a review can be stopped part-way.
-- **Position setup.** Piece palette, side to move, castling rights, en passant and move counters. FEN import with validation that also rejects setups Stockfish can't analyze (a castling right without its king and rook on their home squares, or the side not to move in check). FEN and PGN copy, PGN import.
+- **Position setup.** Piece palette, side to move, castling rights, en passant and move counters. FEN import with validation that also rejects castling rights the board can't back up (Stockfish can hang on them) and positions where the side not to move is in check. FEN and PGN copy, PGN import.
 - **Appearance.** Six board themes, three piece sets and synthesized move sounds, remembered between visits when the browser allows local storage.
 - **Accessible board.** Squares are buttons labeled with the square and piece ("e4, white pawn").
 

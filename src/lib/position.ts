@@ -184,10 +184,9 @@ function unsupportedCastlingRight(chess: Chess, castling: string): string | null
 
 /**
  * Check a FEN before it reaches the board or the engine. On top of chess.js's
- * syntax and king checks, it rejects two setups Stockfish can't analyze: a
- * castling right without the king and rook on their home squares (the engine
- * can hang without ever answering), and the side that just moved still being
- * in check (the engine returns no lines).
+ * syntax and king checks, it rejects a castling right without its king and
+ * rook on their home squares (Stockfish can hang on one and never answer) and
+ * the side that just moved still being in check (Stockfish returns no lines).
  */
 export function validatePositionFen(fen: string): { ok: boolean; error?: string } {
   const result = validateFen(fen);
