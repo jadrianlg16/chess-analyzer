@@ -55,6 +55,7 @@ import {
   type PositionEval
 } from "./lib/review";
 import { cueForMove, playSound } from "./lib/sound";
+import { readSetting, writeSetting } from "./lib/storage";
 import {
   normalizeBoardTheme,
   normalizePieceTheme,
@@ -72,18 +73,15 @@ type ActiveVariation = {
 type PendingPromotion = { from: Square; to: Square; color: Color };
 
 function readStoredBoardTheme(): BoardTheme {
-  if (typeof window === "undefined") return "tournament";
-  return normalizeBoardTheme(window.localStorage.getItem("chess-board-theme"));
+  return normalizeBoardTheme(readSetting("chess-board-theme"));
 }
 
 function readStoredPieceTheme(): PieceTheme {
-  if (typeof window === "undefined") return "modern";
-  return normalizePieceTheme(window.localStorage.getItem("chess-piece-theme"));
+  return normalizePieceTheme(readSetting("chess-piece-theme"));
 }
 
 function readStoredSound(): boolean {
-  if (typeof window === "undefined") return true;
-  return window.localStorage.getItem("chess-sound") !== "off";
+  return readSetting("chess-sound") !== "off";
 }
 
 function buildPgn(tree: GameTree): string {
@@ -289,15 +287,15 @@ export default function App() {
   }, [fen]);
 
   useEffect(() => {
-    window.localStorage.setItem("chess-board-theme", boardTheme);
+    writeSetting("chess-board-theme", boardTheme);
   }, [boardTheme]);
 
   useEffect(() => {
-    window.localStorage.setItem("chess-piece-theme", pieceTheme);
+    writeSetting("chess-piece-theme", pieceTheme);
   }, [pieceTheme]);
 
   useEffect(() => {
-    window.localStorage.setItem("chess-sound", soundOn ? "on" : "off");
+    writeSetting("chess-sound", soundOn ? "on" : "off");
   }, [soundOn]);
 
   // Best-effort move grading while exploring: when the engine settles on the
