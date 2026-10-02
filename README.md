@@ -6,7 +6,7 @@ A chess analysis board that runs Stockfish 18 in the browser, as WebAssembly in 
 
 **[Live demo](https://www.adriangaona.dev/demos/chess/)** · [Project page](https://www.adriangaona.dev/work/chess-analyzer)
 
-Play through or set up a position and the engine analyzes it as you go. Paste a PGN and every move is graded, with per-side accuracy and a winning-chances graph. It is for players who want quick, private analysis without an account: the engine runs on the client, so the app is a set of static files and your games never leave the browser.
+Play through or set up a position and the engine analyzes it as you go. Load a PGN and run a review to get every move graded, with per-side accuracy and a winning-chances graph. It is for players who want quick, private analysis without an account: the engine runs on the client, so the app is a set of static files and your games never leave the browser.
 
 | Game review | Position setup |
 | --- | --- |
@@ -35,7 +35,7 @@ Play through or set up a position and the engine analyzes it as you go. Paste a 
 
 ## Engineering highlights
 
-- **A UCI controller that never sends a command mid-search** ([`src/lib/engine.ts`](src/lib/engine.ts)). The single-threaded WASM build crashes if it receives a burst of commands while it is still unwinding a search. So `UciEngine` runs one search at a time and waits for each `bestmove` before sending anything else. A newer search stops the running one and skips any still queued. A crashed worker is replaced and the search retried, up to two times. A `stop` that gets no answer within 3 s is treated as a hang. Failures surface as an `EngineError` with a typed `code` (`crashed`, `timeout`, `load-failed`, `disposed`). Checkmate and stalemate are answered locally without asking the engine.
+- **A UCI controller that sends nothing but `stop` during a search** ([`src/lib/engine.ts`](src/lib/engine.ts)). The single-threaded WASM build crashes with `RuntimeError: unreachable` if it receives a burst of commands while it is still unwinding a search. So `UciEngine` runs one search at a time: while a search runs it sends only `stop`, and it waits for `bestmove` before sending anything else. A newer search stops the running one and skips any still queued. A crashed worker is replaced and the search retried, up to two times. A `stop` that gets no answer within 3 s is treated as a hang. Failures surface as an `EngineError` with a typed `code` (`crashed`, `timeout`, `load-failed`, `disposed`). Checkmate and stalemate are answered locally without asking the engine.
 - **Tests against a fake engine that behaves like the real one** ([`tests/fakeStockfish.ts`](tests/fakeStockfish.ts)). The scripted worker crashes on any command other than `stop` or `isready` during a search, and it records each such command as a violation. Options make it crash on `go` or ignore `stop`. The engine tests assert that no violations happen, and they cover recovery, giving up after repeated crashes, and recovering on the next search.
 - **Grading on winning chances, not raw centipawns** ([`src/lib/review.ts`](src/lib/review.ts)). Scores go through Lichess's logistic fit (capped at ±10 pawns) to winning chances on a −1…1 scale. A move is an inaccuracy, mistake or blunder when it drops them by at least 0.1, 0.2 or 0.3. Per-move accuracy uses Lichess's formula. Forced mates have their own rules (allowing one, missing one), and playing the engine's own best move is never an error.
 - **A second look before calling a move an error** ([`src/lib/gameAnalysis.ts`](src/lib/gameAnalysis.ts)). Comparing two separate searches can punish a good move because of the horizon effect. So every flagged move is searched again from the position before it with `searchmoves`, on the same budget, and the higher of the two scores for the move is used. Budgets are node counts (60k, 250k, 1M), not depths, so the work per position is bounded and a re-run gives the same result.
@@ -147,7 +147,7 @@ The live demo is served this way, from `/demos/chess/`.
 
 ## Limitations
 
-- **Engine strength.** The lite single-threaded build uses one thread and a smaller network, so it is weaker and slower than native, multi-threaded Stockfish. Depth tops out at 20 in the UI.
+- **Engine strength.** The lite build is weaker than full Stockfish, and it searches on a single thread, so it is also slower than native, multi-threaded Stockfish. Depth tops out at 20 in the UI.
 - **PGN.** Import keeps only the main line; variations and comments in the file are dropped. Export and game review cover the main line only.
 - **Nothing is saved.** A reload starts a new game; only the appearance settings are kept.
 - **Docker headers.** `nginx.conf` sends COOP/COEP headers that this engine build doesn't need. The app behaves the same without them, as on the dev server and the live demo.
