@@ -1,0 +1,5 @@
+dist
+public/vendor
+package-lock.json
+# Markdown is formatted by hand: Prettier would pad every table row.
+*.md
