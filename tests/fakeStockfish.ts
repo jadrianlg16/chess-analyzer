@@ -14,6 +14,8 @@ export type FakeOptions = {
   crashOnGo?: boolean;
   /** Never answer `stop` (a hung engine). */
   ignoreStop?: boolean;
+  /** Go silent for good once a search starts, like the real engine stuck on an impossible castling right. */
+  silentOnGo?: boolean;
 };
 
 /**
@@ -33,6 +35,7 @@ export class FakeStockfish implements WorkerLike {
   private inbox: string[] = [];
   private draining = false;
   private searching = false;
+  private stuck = false;
   private searchTimers: ReturnType<typeof setTimeout>[] = [];
   private fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   private multipv = 1;
@@ -77,6 +80,7 @@ export class FakeStockfish implements WorkerLike {
   }
 
   private handle(command: string) {
+    if (this.stuck) return;
     if (this.searching && command !== "stop" && command !== "isready") {
       this.violations.push(command);
       this.crash();
@@ -105,6 +109,10 @@ export class FakeStockfish implements WorkerLike {
   private startSearch(command: string) {
     this.goCount += 1;
     this.searching = true;
+    if (this.options.silentOnGo) {
+      this.stuck = true;
+      return;
+    }
     if (this.options.crashOnGo) {
       this.searchTimers.push(setTimeout(() => this.crash(), 1));
       return;

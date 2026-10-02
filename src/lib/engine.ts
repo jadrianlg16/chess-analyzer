@@ -31,6 +31,11 @@ export type SearchRequest = {
   limits: SearchLimits;
   /** Called with the current lines (sorted by multipv) whenever the engine reports progress. */
   onInfo?: (lines: UciInfo[]) => void;
+  /**
+   * Longest the search may run. When it is reached the search is stopped and
+   * resolves with its partial lines and `stopped: true`, as with `stop()`.
+   */
+  timeoutMs?: number;
 };
 
 export type SearchResult = {
@@ -38,7 +43,7 @@ export type SearchResult = {
   lines: UciInfo[];
   bestMove?: string;
   terminal?: "checkmate" | "stalemate";
-  /** True when the search ended early: stopped, superseded by a newer search, or disposed. */
+  /** True when the search ended early: stopped, timed out, superseded by a newer search, or disposed. */
   stopped: boolean;
   /** How many engine crashes were recovered from while running this search. */
   restarts: number;
@@ -57,6 +62,12 @@ export type UciEngineOptions = {
   commandTimeoutMs?: number;
   /** How long `stop` may take before the worker is treated as hung and replaced. */
   stopTimeoutMs?: number;
+  /**
+   * How long a search may go without any output before the worker is treated
+   * as hung and replaced. Stockfish reports depth 1 within milliseconds, so
+   * silence means it is stuck (it hangs on some impossible castling rights).
+   */
+  firstOutputTimeoutMs?: number;
   /** Crashes recovered per search before giving up. */
   maxRestarts?: number;
 };
@@ -83,6 +94,10 @@ type ActiveSearch = {
   onInfo?: (lines: UciInfo[]) => void;
   stopSent: boolean;
   stopTimer?: ReturnType<typeof setTimeout>;
+  /** Fires if the engine says nothing at all after `go`. */
+  watchdog?: ReturnType<typeof setTimeout>;
+  /** Fires at the request's `timeoutMs`. */
+  deadline?: ReturnType<typeof setTimeout>;
 };
 
 /**
@@ -93,13 +108,15 @@ type ActiveSearch = {
  * one's `bestmove` before sending anything else. A newer `search()` supersedes
  * older ones: the running search is stopped and queued ones are skipped, and
  * both resolve with `stopped: true`. If the worker crashes it is replaced and
- * the current search is retried (up to `maxRestarts` times).
+ * the current search is retried (up to `maxRestarts` times); a worker that
+ * says nothing after `go`, or ignores `stop`, counts as crashed.
  */
 export class UciEngine {
   private readonly createWorker: () => WorkerLike;
   private readonly initTimeoutMs: number;
   private readonly commandTimeoutMs: number;
   private readonly stopTimeoutMs: number;
+  private readonly firstOutputTimeoutMs: number;
   private readonly maxRestarts: number;
 
   private worker?: WorkerLike;
@@ -118,6 +135,7 @@ export class UciEngine {
     this.initTimeoutMs = options.initTimeoutMs ?? 30_000;
     this.commandTimeoutMs = options.commandTimeoutMs ?? 10_000;
     this.stopTimeoutMs = options.stopTimeoutMs ?? 3_000;
+    this.firstOutputTimeoutMs = options.firstOutputTimeoutMs ?? 10_000;
     this.maxRestarts = options.maxRestarts ?? 2;
   }
 
@@ -141,13 +159,7 @@ export class UciEngine {
    */
   stop(): void {
     this.stoppedTicket = this.ticket;
-    const search = this.active;
-    if (!search || search.stopSent || !this.worker) return;
-    search.stopSent = true;
-    this.send("stop");
-    search.stopTimer = setTimeout(() => {
-      this.crash(new EngineError("Stockfish did not stop in time.", "timeout"));
-    }, this.stopTimeoutMs);
+    if (this.active) this.stopSearch(this.active);
   }
 
   dispose(): void {
@@ -187,6 +199,12 @@ export class UciEngine {
     const bestMoveLine = this.waitForLine((line) => line.startsWith("bestmove"));
     this.send(`position fen ${request.fen}`);
     this.send(goCommand(request.limits));
+    search.watchdog = setTimeout(() => {
+      this.crash(new EngineError("Stockfish stopped responding.", "timeout"));
+    }, this.firstOutputTimeoutMs);
+    if (request.timeoutMs !== undefined) {
+      search.deadline = setTimeout(() => this.stopSearch(search), request.timeoutMs);
+    }
 
     try {
       const line = await bestMoveLine;
@@ -204,9 +222,19 @@ export class UciEngine {
       }
       throw error;
     } finally {
-      if (search.stopTimer) clearTimeout(search.stopTimer);
+      clearSearchTimers(search);
       if (this.active === search) this.active = undefined;
     }
+  }
+
+  /** Ask the engine to finish `search` now; a worker that ignores `stop` is replaced. */
+  private stopSearch(search: ActiveSearch): void {
+    if (search.stopSent || !this.worker || this.active !== search) return;
+    search.stopSent = true;
+    this.send("stop");
+    search.stopTimer = setTimeout(() => {
+      this.crash(new EngineError("Stockfish did not stop in time.", "timeout"));
+    }, this.stopTimeoutMs);
   }
 
   private ensureWorker(): Promise<void> {
@@ -251,6 +279,10 @@ export class UciEngine {
   private handleLine(line: string): void {
     const search = this.active;
     if (search) {
+      if (search.watchdog) {
+        clearTimeout(search.watchdog);
+        search.watchdog = undefined;
+      }
       const info = parseUciInfo(line);
       if (info) {
         const previous = search.lines.get(info.multipv);
@@ -289,7 +321,7 @@ export class UciEngine {
     this.worker = undefined;
     this.initPromise = undefined;
     this.multipv = 1;
-    if (this.active?.stopTimer) clearTimeout(this.active.stopTimer);
+    if (this.active) clearSearchTimers(this.active);
     worker?.terminate();
 
     const waiters = [...this.waiters];
@@ -352,6 +384,12 @@ export function terminalState(fen: string): "checkmate" | "stalemate" | null {
 function terminalResult(fen: string, terminal: "checkmate" | "stalemate"): SearchResult {
   const score: EngineScore = terminal === "checkmate" ? { kind: "mate", value: 0 } : { kind: "cp", value: 0 };
   return { fen, lines: [{ multipv: 1, depth: 0, score, pv: [] }], terminal, stopped: false, restarts: 0 };
+}
+
+function clearSearchTimers(search: ActiveSearch): void {
+  for (const timer of [search.stopTimer, search.watchdog, search.deadline]) {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function stoppedResult(fen: string, restarts: number): SearchResult {

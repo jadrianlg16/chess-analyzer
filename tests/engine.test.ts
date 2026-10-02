@@ -141,6 +141,43 @@ describe("UciEngine", () => {
     engine.dispose();
   });
 
+  it("replaces a worker that goes silent after go, and retries the search", async () => {
+    const fake = fakeFactory((index) => ({ scoreFor, silentOnGo: index === 0 }));
+    const engine = new UciEngine({ createWorker: fake.create, firstOutputTimeoutMs: 30 });
+
+    const result = await engine.search({ fen: MIDDLEGAME, limits: { depth: 10 } });
+
+    expect(fake.workers[0].terminated).toBe(true);
+    expect(result).toMatchObject({ stopped: false, restarts: 1 });
+    expect(result.lines[0].score.value).toBe(77);
+    engine.dispose();
+  });
+
+  it("fails with a timeout error when the engine never answers a search", async () => {
+    const fake = fakeFactory(() => ({ silentOnGo: true }));
+    const engine = new UciEngine({ createWorker: fake.create, firstOutputTimeoutMs: 20, maxRestarts: 1 });
+
+    await expect(engine.search({ fen: START, limits: { depth: 10 } })).rejects.toMatchObject({
+      name: "EngineError",
+      code: "timeout"
+    });
+    expect(fake.workers).toHaveLength(2);
+    engine.dispose();
+  });
+
+  it("stops a search at its timeout and keeps the partial lines", async () => {
+    const fake = fakeFactory(() => ({ scoreFor, autoFinish: false }));
+    const engine = new UciEngine({ createWorker: fake.create });
+
+    const result = await engine.search({ fen: MIDDLEGAME, limits: {}, timeoutMs: 30 });
+
+    expect(result.stopped).toBe(true);
+    expect(result.lines[0].score.value).toBe(77);
+    expect(fake.workers[0].received.at(-1)).toBe("stop");
+    expect(fake.workers[0].violations).toEqual([]);
+    engine.dispose();
+  });
+
   it("stop() keeps the partial lines", async () => {
     const fake = fakeFactory(() => ({ scoreFor, autoFinish: false }));
     const engine = new UciEngine({ createWorker: fake.create });
