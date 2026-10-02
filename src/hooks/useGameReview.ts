@@ -1,11 +1,9 @@
 import { useCallback, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import type { EvalPoint } from "../components/EvalGraph";
 import type { ReviewView } from "../components/MovePanel";
 import { REVIEW_PRESETS, reviewGame, type ReviewPreset } from "../lib/gameAnalysis";
-import { mainlineNodes, setNag, type GameTree } from "../lib/gameTree";
-import { nagForJudgement } from "../lib/nags";
-import { sideToMove } from "../lib/position";
-import { povValue, winPercent, type GameReview, type PositionEval } from "../lib/review";
+import type { GameTree } from "../lib/gameTree";
+import type { GameReview, PositionEval } from "../lib/review";
+import { applyReviewNags, mainlineReviewMoves, reviewGraphPoints } from "../lib/reviewTree";
 
 type GameReviewOptions = {
   tree: GameTree;
@@ -23,11 +21,6 @@ type ReviewState = {
   total: number;
 };
 
-function whiteWinPercent(evaluation: PositionEval | undefined, fen: string): number | null {
-  if (!evaluation) return null;
-  return winPercent(povValue(evaluation.score, sideToMove(fen), "w"));
-}
-
 /**
  * Runs a game review of the main line on its own engine, marks the graded
  * moves with ?!, ? and ?? in the move tree, and builds the panel's summary
@@ -42,8 +35,8 @@ export function useGameReview({ tree, setTree, evalCache, onStart }: GameReviewO
   const cancelRef = useRef(false);
 
   async function start() {
-    const nodes = mainlineNodes(tree);
-    if (!nodes.length || running) return;
+    const moves = mainlineReviewMoves(tree);
+    if (!moves.length || running) return;
 
     cancelRef.current = false;
     setRunning(true);
@@ -51,14 +44,7 @@ export function useGameReview({ tree, setTree, evalCache, onStart }: GameReviewO
     setResult(null);
     setError(null);
 
-    const moves = nodes.map((node) => ({
-      id: node.id,
-      color: node.color,
-      uci: node.uci,
-      fen: node.fen,
-      parentFen: node.parentId ? tree.nodes[node.parentId]?.fen ?? tree.rootFen : tree.rootFen
-    }));
-    setProgress({ done: 0, total: nodes.length + 1 });
+    setProgress({ done: 0, total: moves.length + 1 });
 
     try {
       const { review, evals, cancelled, positions } = await reviewGame(moves, tree.rootFen, REVIEW_PRESETS[preset].nodes, {
@@ -68,14 +54,8 @@ export function useGameReview({ tree, setTree, evalCache, onStart }: GameReviewO
 
       for (const [positionFen, evaluation] of evals) evalCache.current.set(positionFen, evaluation);
 
-      // Apply NAGs in one pure updater (safe under StrictMode).
-      setTree((current) => {
-        let next = current;
-        for (const move of Object.values(review.moves)) {
-          next = setNag(next, move.nodeId, nagForJudgement(move.judgement));
-        }
-        return next;
-      });
+      // A pure updater, so StrictMode's double call is harmless.
+      setTree((current) => applyReviewNags(current, review));
       setResult({ review, evals, cancelled, total: positions });
     } catch (reviewError) {
       setError(
@@ -100,16 +80,7 @@ export function useGameReview({ tree, setTree, evalCache, onStart }: GameReviewO
   const view = useMemo<ReviewView | null>(() => {
     if (!result) return null;
     const { review, evals, cancelled, total } = result;
-    const points: EvalPoint[] = [
-      { id: null, label: "Start", whiteWin: whiteWinPercent(evals.get(tree.rootFen), tree.rootFen) },
-      ...mainlineNodes(tree).map((node) => ({
-        id: node.id,
-        label: `${node.moveNumber}${node.color === "w" ? "." : "…"} ${node.san}`,
-        whiteWin: whiteWinPercent(evals.get(node.fen), node.fen),
-        ...(review.moves[node.id] ? { judgement: review.moves[node.id].judgement } : {})
-      }))
-    ];
-    return { review, points, cancelled, evaluated: evals.size, total };
+    return { review, points: reviewGraphPoints(tree, review, evals), cancelled, evaluated: evals.size, total };
   }, [result, tree]);
 
   return {

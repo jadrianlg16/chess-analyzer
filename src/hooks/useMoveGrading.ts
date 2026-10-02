@@ -1,8 +1,8 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { AnalysisUpdate } from "../lib/analysis";
-import { currentNode, setNag, type GameTree } from "../lib/gameTree";
-import { nagForJudgement } from "../lib/nags";
-import { judgeMove, type MoveReview, type PositionEval } from "../lib/review";
+import { setNag, type GameTree } from "../lib/gameTree";
+import type { MoveReview, PositionEval } from "../lib/review";
+import { gradeExploredMove } from "../lib/reviewTree";
 
 type MoveGradingOptions = {
   analysis: AnalysisUpdate;
@@ -17,30 +17,11 @@ type MoveGradingOptions = {
   evalCache: MutableRefObject<Map<string, PositionEval>>;
 };
 
-/**
- * Best-effort move grading while exploring: when the engine settles on the
- * board position, cache its eval and grade the move that led here against
- * its parent's eval, if that is cached too.
- */
+/** Marks moves with ?!, ? or ?? while exploring, as live analysis settles on each position. */
 export function useMoveGrading({ analysis, fen, enabled, tree, setTree, reviewedMoves, evalCache }: MoveGradingOptions) {
   useEffect(() => {
     if (!enabled) return;
-    if (analysis.status !== "ready" || analysis.fen !== fen) return;
-    const top = analysis.lines[0];
-    if (!top) return;
-
-    const bestMove = analysis.bestMove ?? top.uciMoves[0];
-    const evaluation: PositionEval = { score: top.score, depth: top.depth, ...(bestMove ? { bestMove } : {}) };
-    evalCache.current.set(fen, evaluation);
-
-    const node = currentNode(tree);
-    if (!node || reviewedMoves?.[node.id]) return;
-    const parentFen = node.parentId ? tree.nodes[node.parentId]?.fen ?? tree.rootFen : tree.rootFen;
-    const parent = evalCache.current.get(parentFen);
-    if (!parent) return;
-
-    const { judgement } = judgeMove({ mover: node.color, before: parent, after: evaluation, playedUci: node.uci });
-    const nag = nagForJudgement(judgement);
-    if (node.nag !== nag) setTree((current) => setNag(current, node.id, nag));
+    const change = gradeExploredMove({ analysis, fen, tree, reviewedMoves, cache: evalCache.current });
+    if (change) setTree((current) => setNag(current, change.nodeId, change.nag));
   }, [analysis, enabled, evalCache, fen, reviewedMoves, setTree, tree]);
 }

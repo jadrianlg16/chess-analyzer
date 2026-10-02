@@ -1,14 +1,6 @@
 import { useState, type MouseEvent } from "react";
 import type { Judgement } from "../lib/review";
-
-export type EvalPoint = {
-  /** Move node id, or null for the starting position. */
-  id: string | null;
-  label: string;
-  /** White's winning chances in percent, or null when the position was not evaluated. */
-  whiteWin: number | null;
-  judgement?: Judgement;
-};
+import type { EvalPoint } from "../lib/reviewTree";
 
 type EvalGraphProps = {
   points: EvalPoint[];

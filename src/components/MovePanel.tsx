@@ -6,7 +6,8 @@ import { REVIEW_PRESETS, type ReviewPreset } from "../lib/gameAnalysis";
 import { nagGlyph } from "../lib/nags";
 import { isError, type GameReview, type MoveReview, type SideSummary } from "../lib/review";
 import { CollapsiblePanel } from "./CollapsiblePanel";
-import { EvalGraph, type EvalPoint } from "./EvalGraph";
+import type { EvalPoint } from "../lib/reviewTree";
+import { EvalGraph } from "./EvalGraph";
 
 export type ReviewView = {
   review: GameReview;
