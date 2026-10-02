@@ -33,9 +33,7 @@ export function AppearancePanel({
         <div className="theme-grid">
           {boardThemes.map((theme) => (
             <button
-              className={`theme-card board-swatch board-swatch-${theme.id} ${
-                boardTheme === theme.id ? "active" : ""
-              }`}
+              className={`theme-card board-swatch board-swatch-${theme.id} ${boardTheme === theme.id ? "active" : ""}`}
               key={theme.id}
               type="button"
               onClick={() => onBoardThemeChange(theme.id)}
@@ -53,9 +51,7 @@ export function AppearancePanel({
         <div className="theme-grid">
           {pieceThemes.map((theme) => (
             <button
-              className={`theme-card piece-swatch piece-theme-${theme.id} ${
-                pieceTheme === theme.id ? "active" : ""
-              }`}
+              className={`theme-card piece-swatch piece-theme-${theme.id} ${pieceTheme === theme.id ? "active" : ""}`}
               key={theme.id}
               type="button"
               onClick={() => onPieceThemeChange(theme.id)}

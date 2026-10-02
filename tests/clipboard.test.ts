@@ -10,7 +10,9 @@ describe("copyToClipboard", () => {
   });
 
   it("reports failure when the browser refuses the write", async () => {
-    const refused = { writeText: () => Promise.reject(new DOMException("Write permission denied.", "NotAllowedError")) };
+    const refused = {
+      writeText: () => Promise.reject(new DOMException("Write permission denied.", "NotAllowedError"))
+    };
     await expect(copyToClipboard("1. e4 *", refused)).resolves.toBe(false);
   });
 

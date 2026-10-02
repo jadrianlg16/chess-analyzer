@@ -124,7 +124,7 @@ export class FakeStockfish implements WorkerLike {
     const cp =
       restricted && this.options.scoreForMove
         ? this.options.scoreForMove(this.fen, restricted[0])
-        : this.options.scoreFor?.(this.fen) ?? 25;
+        : (this.options.scoreFor?.(this.fen) ?? 25);
     for (let depth = 1; depth <= 3; depth += 1) {
       this.searchTimers.push(
         setTimeout(() => {

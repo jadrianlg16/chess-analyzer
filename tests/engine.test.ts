@@ -28,12 +28,19 @@ describe("parseUciInfo", () => {
   });
 
   it("keeps terminal lines that have no pv", () => {
-    expect(parseUciInfo("info depth 0 score mate 0")).toMatchObject({ depth: 0, score: { kind: "mate", value: 0 }, pv: [] });
+    expect(parseUciInfo("info depth 0 score mate 0")).toMatchObject({
+      depth: 0,
+      score: { kind: "mate", value: 0 },
+      pv: []
+    });
     expect(parseUciInfo("info depth 0 score cp 0")).toMatchObject({ score: { kind: "cp", value: 0 }, pv: [] });
   });
 
   it.each(engineOutputCases)("parses $name", ({ output, expected }) => {
-    const parsed = output.split("\n").map(parseUciInfo).filter((info) => info !== null);
+    const parsed = output
+      .split("\n")
+      .map(parseUciInfo)
+      .filter((info) => info !== null);
     expect(parsed).toEqual(expected);
   });
 
@@ -50,7 +57,12 @@ describe("UciEngine", () => {
     const engine = new UciEngine({ createWorker: fake.create });
     const progress: UciInfo[][] = [];
 
-    const result = await engine.search({ fen: START, multipv: 2, limits: { depth: 12 }, onInfo: (lines) => progress.push(lines) });
+    const result = await engine.search({
+      fen: START,
+      multipv: 2,
+      limits: { depth: 12 },
+      onInfo: (lines) => progress.push(lines)
+    });
 
     expect(result.stopped).toBe(false);
     expect(result.lines).toHaveLength(2);

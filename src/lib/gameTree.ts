@@ -76,7 +76,7 @@ export function currentLastMove(tree: GameTree): { from: Square; to: Square } | 
 }
 
 export function currentNode(tree: GameTree): MoveNode | null {
-  return tree.currentId ? tree.nodes[tree.currentId] ?? null : null;
+  return tree.currentId ? (tree.nodes[tree.currentId] ?? null) : null;
 }
 
 /**

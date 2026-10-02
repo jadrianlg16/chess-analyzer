@@ -1,12 +1,4 @@
-import {
-  Chess,
-  DEFAULT_POSITION,
-  validateFen,
-  type Color,
-  type Piece,
-  type PieceSymbol,
-  type Square
-} from "chess.js";
+import { Chess, DEFAULT_POSITION, validateFen, type Color, type Piece, type PieceSymbol, type Square } from "chess.js";
 
 export type BoardMap = Partial<Record<Square, Piece>>;
 

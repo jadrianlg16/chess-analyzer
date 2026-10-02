@@ -58,11 +58,8 @@ export function AnalysisPanel({
       eyebrow="Engine"
       title="Analysis"
       defaultExpanded
-      actions={
-        <span className={`status-pill status-${status}`}>{status}</span>
-      }
+      actions={<span className={`status-pill status-${status}`}>{status}</span>}
     >
-
       <div className="engine-controls">
         <label>
           Depth
@@ -144,9 +141,7 @@ export function AnalysisPanel({
         {lines.length ? (
           lines.map((line) => (
             <div
-              className={`analysis-line ${
-                activeVariation?.multipv === line.multipv ? "active-line" : ""
-              }`}
+              className={`analysis-line ${activeVariation?.multipv === line.multipv ? "active-line" : ""}`}
               key={line.multipv}
             >
               <div className="line-score">
@@ -165,8 +160,7 @@ export function AnalysisPanel({
                 <div className="move-chip-row" aria-label={`Line ${line.multipv} moves`}>
                   {(line.sanMoves.length ? line.sanMoves : line.uciMoves).map((move, index) => {
                     const ply = index + 1;
-                    const isActive =
-                      activeVariation?.multipv === line.multipv && activeVariation.ply === ply;
+                    const isActive = activeVariation?.multipv === line.multipv && activeVariation.ply === ply;
 
                     return (
                       <button

@@ -1,12 +1,4 @@
-import {
-  Check,
-  Clipboard,
-  Eraser,
-  FlipHorizontal2,
-  RotateCcw,
-  Trash2,
-  Upload
-} from "lucide-react";
+import { Check, Clipboard, Eraser, FlipHorizontal2, RotateCcw, Trash2, Upload } from "lucide-react";
 import type { Color, Piece } from "chess.js";
 import { pieceTypes, type CastlingRights, type PositionMeta } from "../lib/position";
 import type { PieceTheme } from "../lib/themes";
@@ -74,7 +66,6 @@ export function SetupPanel({
         </div>
       }
     >
-
       <div className="toolbar">
         <button className="icon-button" type="button" title="Start position" onClick={onReset}>
           <RotateCcw size={18} />

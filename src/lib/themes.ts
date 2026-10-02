@@ -7,14 +7,7 @@ export type ThemeOption<T extends string> = {
   description: string;
 };
 
-export const boardThemeIds: BoardTheme[] = [
-  "tournament",
-  "walnut",
-  "ocean",
-  "slate",
-  "midnight",
-  "coral"
-];
+export const boardThemeIds: BoardTheme[] = ["tournament", "walnut", "ocean", "slate", "midnight", "coral"];
 
 /** Migrate older persisted ids to the current set. */
 export function normalizePieceTheme(value: string | null): PieceTheme {

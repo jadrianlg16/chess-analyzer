@@ -44,10 +44,7 @@ export class StockfishClient {
   private generation = 0;
   private lastUpdate: AnalysisUpdate = { status: "idle", lines: [] };
 
-  constructor(
-    onUpdate: (update: AnalysisUpdate) => void,
-    options: { createWorker?: () => WorkerLike } = {}
-  ) {
+  constructor(onUpdate: (update: AnalysisUpdate) => void, options: { createWorker?: () => WorkerLike } = {}) {
     this.onUpdate = onUpdate;
     this.engine = new UciEngine({ createWorker: options.createWorker ?? createEngineWorker });
   }
@@ -71,9 +68,7 @@ export class StockfishClient {
             lines: toLines(result.lines),
             fen,
             ...(result.bestMove ? { bestMove: result.bestMove } : {}),
-            ...(result.restarts
-              ? { message: "Stockfish crashed and was restarted automatically." }
-              : {})
+            ...(result.restarts ? { message: "Stockfish crashed and was restarted automatically." } : {})
           }),
         (error: unknown) =>
           this.emit(generation, {

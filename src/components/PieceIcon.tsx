@@ -53,11 +53,7 @@ export function PieceIcon({ piece, theme }: PieceIconProps) {
 
   if (theme === "native") {
     return (
-      <span
-        className={`piece piece-native piece-${piece.color}`}
-        data-label={label}
-        aria-hidden="true"
-      >
+      <span className={`piece piece-native piece-${piece.color}`} data-label={label} aria-hidden="true">
         {pieceGlyphs[piece.color][piece.type]}
       </span>
     );

@@ -44,9 +44,17 @@ describe("gradeExploredMove", () => {
   const [e4, f6] = mainlineNodes(tree);
 
   it("caches the settled eval and grades the move against its parent", () => {
-    const cache = new Map<string, PositionEval>([[e4.fen, { score: { kind: "cp", value: -30 }, depth: 14, bestMove: "e7e5" }]]);
+    const cache = new Map<string, PositionEval>([
+      [e4.fen, { score: { kind: "cp", value: -30 }, depth: 14, bestMove: "e7e5" }]
+    ]);
     // After 1...f6 White (to move) is +1.80: Black lost about 0.26 in winning chances.
-    const change = gradeExploredMove({ analysis: ready(f6.fen, 180, "d2d4"), fen: f6.fen, tree, reviewedMoves: undefined, cache });
+    const change = gradeExploredMove({
+      analysis: ready(f6.fen, 180, "d2d4"),
+      fen: f6.fen,
+      tree,
+      reviewedMoves: undefined,
+      cache
+    });
 
     expect(cache.get(f6.fen)?.score).toEqual({ kind: "cp", value: 180 });
     expect(change).toEqual({ nodeId: f6.id, nag: 2 }); // ?
@@ -54,14 +62,24 @@ describe("gradeExploredMove", () => {
 
   it("does nothing until the parent position has been evaluated", () => {
     const cache = new Map<string, PositionEval>();
-    expect(gradeExploredMove({ analysis: ready(f6.fen, 120, "d2d4"), fen: f6.fen, tree, reviewedMoves: undefined, cache })).toBeNull();
+    expect(
+      gradeExploredMove({ analysis: ready(f6.fen, 120, "d2d4"), fen: f6.fen, tree, reviewedMoves: undefined, cache })
+    ).toBeNull();
     expect(cache.has(f6.fen)).toBe(true);
   });
 
   it("ignores analysis of another position or one still running", () => {
     const cache = new Map<string, PositionEval>([[e4.fen, { score: { kind: "cp", value: -30 }, depth: 14 }]]);
     const onE4 = stepBackward(tree);
-    expect(gradeExploredMove({ analysis: ready(f6.fen, 120, "d2d4"), fen: e4.fen, tree: onE4, reviewedMoves: undefined, cache })).toBeNull();
+    expect(
+      gradeExploredMove({
+        analysis: ready(f6.fen, 120, "d2d4"),
+        fen: e4.fen,
+        tree: onE4,
+        reviewedMoves: undefined,
+        cache
+      })
+    ).toBeNull();
     const running: AnalysisUpdate = { ...ready(f6.fen, 120, "d2d4"), status: "analyzing" };
     expect(gradeExploredMove({ analysis: running, fen: f6.fen, tree, reviewedMoves: undefined, cache })).toBeNull();
   });
@@ -69,8 +87,17 @@ describe("gradeExploredMove", () => {
   it("leaves moves graded by a game review alone", () => {
     const cache = new Map<string, PositionEval>([[e4.fen, { score: { kind: "cp", value: -30 }, depth: 14 }]]);
     const reviewed = {
-      [f6.id]: { nodeId: f6.id, color: "b" as const, judgement: "good" as const, winBefore: 50, winAfter: 45, accuracy: 90 }
+      [f6.id]: {
+        nodeId: f6.id,
+        color: "b" as const,
+        judgement: "good" as const,
+        winBefore: 50,
+        winAfter: 45,
+        accuracy: 90
+      }
     };
-    expect(gradeExploredMove({ analysis: ready(f6.fen, 120, "d2d4"), fen: f6.fen, tree, reviewedMoves: reviewed, cache })).toBeNull();
+    expect(
+      gradeExploredMove({ analysis: ready(f6.fen, 120, "d2d4"), fen: f6.fen, tree, reviewedMoves: reviewed, cache })
+    ).toBeNull();
   });
 });

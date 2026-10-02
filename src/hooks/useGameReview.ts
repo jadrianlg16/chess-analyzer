@@ -1,4 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction
+} from "react";
 import type { ReviewView } from "../components/MovePanel";
 import { REVIEW_PRESETS, reviewGame, type ReviewPreset } from "../lib/gameAnalysis";
 import type { GameTree } from "../lib/gameTree";
@@ -47,10 +55,15 @@ export function useGameReview({ tree, setTree, evalCache, onStart }: GameReviewO
     setProgress({ done: 0, total: moves.length + 1 });
 
     try {
-      const { review, evals, cancelled, positions } = await reviewGame(moves, tree.rootFen, REVIEW_PRESETS[preset].nodes, {
-        onProgress: (done, total) => setProgress({ done, total }),
-        isCancelled: () => cancelRef.current
-      });
+      const { review, evals, cancelled, positions } = await reviewGame(
+        moves,
+        tree.rootFen,
+        REVIEW_PRESETS[preset].nodes,
+        {
+          onProgress: (done, total) => setProgress({ done, total }),
+          isCancelled: () => cancelRef.current
+        }
+      );
 
       for (const [positionFen, evaluation] of evals) evalCache.current.set(positionFen, evaluation);
 

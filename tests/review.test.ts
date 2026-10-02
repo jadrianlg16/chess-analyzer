@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Chess } from "chess.js";
-import {
-  buildReview,
-  judgeMove,
-  moveAccuracy,
-  povValue,
-  winningChances,
-  type PositionEval
-} from "../src/lib/review";
+import { buildReview, judgeMove, moveAccuracy, povValue, winningChances, type PositionEval } from "../src/lib/review";
 
 const cp = (value: number, bestMove?: string): PositionEval => ({
   score: { kind: "cp", value },
@@ -28,7 +21,9 @@ describe("winning chances", () => {
   });
 
   it("scores mates from either side, including mate 0 (already checkmated)", () => {
-    expect(povValue({ kind: "mate", value: 3 }, "w", "w")).toBeGreaterThan(povValue({ kind: "mate", value: 5 }, "w", "w"));
+    expect(povValue({ kind: "mate", value: 3 }, "w", "w")).toBeGreaterThan(
+      povValue({ kind: "mate", value: 5 }, "w", "w")
+    );
     expect(povValue({ kind: "mate", value: 0 }, "b", "w")).toBeGreaterThan(90_000);
     expect(povValue({ kind: "mate", value: 0 }, "b", "b")).toBeLessThan(-90_000);
     expect(povValue({ kind: "cp", value: 40 }, "b", "w")).toBe(-40);
@@ -59,11 +54,13 @@ describe("judgeMove", () => {
     const before = cp(580, "g5f6");
     const secondLook = cp(640, "b5d7");
     expect(judgeMove({ mover: "w", before, after: afterBxd7, playedUci: "b5d7" }).judgement).toBe("blunder");
-    expect(judgeMove({ mover: "w", before, after: afterBxd7, playedUci: "b5d7", played: secondLook }).judgement).toBe("good");
+    expect(judgeMove({ mover: "w", before, after: afterBxd7, playedUci: "b5d7", played: secondLook }).judgement).toBe(
+      "good"
+    );
     // A second look never makes a move look worse than the search after it.
-    expect(
-      judgeMove({ mover: "w", before, after: cp(-560), playedUci: "b5d7", played: cp(100) }).judgement
-    ).toBe("good");
+    expect(judgeMove({ mover: "w", before, after: cp(-560), playedUci: "b5d7", played: cp(100) }).judgement).toBe(
+      "good"
+    );
   });
 
   it("does not punish a winning position that stays winning", () => {
@@ -75,9 +72,15 @@ describe("judgeMove", () => {
   it("grades by the drop in winning chances", () => {
     expect(judgeMove({ mover: "w", before: cp(30, "e2e4"), after: cp(-10), playedUci: "a2a3" }).judgement).toBe("good");
     // +0.30 -> -0.50 drops winning chances by 0.15; -> -1.00 by 0.24.
-    expect(judgeMove({ mover: "w", before: cp(30, "e2e4"), after: cp(50), playedUci: "a2a3" }).judgement).toBe("inaccuracy");
-    expect(judgeMove({ mover: "w", before: cp(30, "e2e4"), after: cp(100), playedUci: "a2a3" }).judgement).toBe("mistake");
-    expect(judgeMove({ mover: "b", before: cp(0, "e7e5"), after: cp(400), playedUci: "f7f6" }).judgement).toBe("blunder");
+    expect(judgeMove({ mover: "w", before: cp(30, "e2e4"), after: cp(50), playedUci: "a2a3" }).judgement).toBe(
+      "inaccuracy"
+    );
+    expect(judgeMove({ mover: "w", before: cp(30, "e2e4"), after: cp(100), playedUci: "a2a3" }).judgement).toBe(
+      "mistake"
+    );
+    expect(judgeMove({ mover: "b", before: cp(0, "e7e5"), after: cp(400), playedUci: "f7f6" }).judgement).toBe(
+      "blunder"
+    );
   });
 
   it("flags allowing a forced mate and missing one", () => {

@@ -18,7 +18,15 @@ type MoveGradingOptions = {
 };
 
 /** Marks moves with ?!, ? or ?? while exploring, as live analysis settles on each position. */
-export function useMoveGrading({ analysis, fen, enabled, tree, setTree, reviewedMoves, evalCache }: MoveGradingOptions) {
+export function useMoveGrading({
+  analysis,
+  fen,
+  enabled,
+  tree,
+  setTree,
+  reviewedMoves,
+  evalCache
+}: MoveGradingOptions) {
   useEffect(() => {
     if (!enabled) return;
     const change = gradeExploredMove({ analysis, fen, tree, reviewedMoves, cache: evalCache.current });

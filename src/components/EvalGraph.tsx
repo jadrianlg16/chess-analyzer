@@ -138,11 +138,7 @@ export function EvalGraph({ points, currentId, onSelect }: EvalGraphProps) {
         </svg>
 
         {hovered ? (
-          <div
-            className="eval-graph-tooltip"
-            style={{ left: `${(x(hover!) / WIDTH) * 100}%` }}
-            aria-hidden="true"
-          >
+          <div className="eval-graph-tooltip" style={{ left: `${(x(hover!) / WIDTH) * 100}%` }} aria-hidden="true">
             <strong>{hovered.whiteWin === null ? "Not evaluated" : `${Math.round(hovered.whiteWin)}%`}</strong>
             <span>{hovered.whiteWin === null ? "" : "White's winning chances"}</span>
             <span className="eval-graph-tooltip-move">

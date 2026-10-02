@@ -18,7 +18,11 @@ function arrowFor(uci: string | undefined, tone: BoardArrow["tone"]): BoardArrow
  * otherwise, when switched on, the first move of each engine line (the top
  * line as "best").
  */
-export function boardArrows(variation: ActiveVariation | null, lines: AnalysisLine[], showLines: boolean): BoardArrow[] {
+export function boardArrows(
+  variation: ActiveVariation | null,
+  lines: AnalysisLine[],
+  showLines: boolean
+): BoardArrow[] {
   if (variation) {
     const index = Math.max(0, Math.min(variation.ply - 1, variation.uciMoves.length - 1));
     const arrow = arrowFor(variation.uciMoves[index], "best");

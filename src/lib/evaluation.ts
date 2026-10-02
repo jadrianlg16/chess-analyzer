@@ -73,8 +73,7 @@ export function evaluationFromLine(fen: string, line?: AnalysisLine): Evaluation
   }
 
   const cp = score.value;
-  const leader =
-    Math.abs(cp) <= EQUAL_THRESHOLD_CP ? "equal" : cp > 0 ? "white" : "black";
+  const leader = Math.abs(cp) <= EQUAL_THRESHOLD_CP ? "equal" : cp > 0 ? "white" : "black";
   const whiteShare = clamp(50 + (clamp(cp, -BAR_CAP_CP, BAR_CAP_CP) / BAR_CAP_CP) * 50, 4, 96);
   const label = formatCentipawn(cp);
 
@@ -85,9 +84,7 @@ export function evaluationFromLine(fen: string, line?: AnalysisLine): Evaluation
     caption: leader === "equal" ? "Equal" : leader === "white" ? "White" : "Black",
     whiteShare,
     ariaLabel:
-      leader === "equal"
-        ? `${label}, equal position`
-        : `${label}, ${leader === "white" ? "White" : "Black"} is better`
+      leader === "equal" ? `${label}, equal position` : `${label}, ${leader === "white" ? "White" : "Black"} is better`
   };
 }
 

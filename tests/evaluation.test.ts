@@ -33,8 +33,17 @@ describe("evaluationFromLine", () => {
   });
 
   it("calls small scores equal and keeps the bar off the ends", () => {
-    const line = (value: number) => ({ multipv: 1, depth: 12, score: { kind: "cp" as const, value }, uciMoves: [], sanMoves: [] });
-    expect(evaluationFromLine(BLACK_TO_MOVE_AFTER_E4, line(15))).toMatchObject({ leader: "equal", placement: "middle" });
+    const line = (value: number) => ({
+      multipv: 1,
+      depth: 12,
+      score: { kind: "cp" as const, value },
+      uciMoves: [],
+      sanMoves: []
+    });
+    expect(evaluationFromLine(BLACK_TO_MOVE_AFTER_E4, line(15))).toMatchObject({
+      leader: "equal",
+      placement: "middle"
+    });
     expect(evaluationFromLine(BLACK_TO_MOVE_AFTER_E4, line(5000)).whiteShare).toBe(4);
     expect(evaluationFromLine(BLACK_TO_MOVE_AFTER_E4, line(-5000)).whiteShare).toBe(96);
   });
@@ -45,6 +54,10 @@ describe("evaluationFromLine", () => {
   });
 
   it("has a neutral state before the engine reports", () => {
-    expect(evaluationFromLine(BLACK_TO_MOVE_AFTER_E4)).toMatchObject({ leader: "unknown", label: "--", whiteShare: 50 });
+    expect(evaluationFromLine(BLACK_TO_MOVE_AFTER_E4)).toMatchObject({
+      leader: "unknown",
+      label: "--",
+      whiteShare: 50
+    });
   });
 });

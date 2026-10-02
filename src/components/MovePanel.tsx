@@ -132,7 +132,6 @@ export function MovePanel({
             />
           </div>
         ) : null}
-
       </div>
 
       {reviewError && !analyzing ? <p className="engine-message">{reviewError}</p> : null}

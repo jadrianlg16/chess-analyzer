@@ -141,8 +141,7 @@ export function judgeMove(input: {
   }
 
   const drop = winningChances(before) - winningChances(after);
-  const judgement: Judgement =
-    drop >= 0.3 ? "blunder" : drop >= 0.2 ? "mistake" : drop >= 0.1 ? "inaccuracy" : "good";
+  const judgement: Judgement = drop >= 0.3 ? "blunder" : drop >= 0.2 ? "mistake" : drop >= 0.1 ? "inaccuracy" : "good";
   return { judgement, winBefore, winAfter, accuracy };
 }
 
@@ -195,9 +194,7 @@ function summarize(moves: MoveReview[]): SideSummary {
   const count = (judgement: Judgement) => moves.filter((move) => move.judgement === judgement).length;
   return {
     moves: moves.length,
-    accuracy: moves.length
-      ? moves.reduce((total, move) => total + move.accuracy, 0) / moves.length
-      : null,
+    accuracy: moves.length ? moves.reduce((total, move) => total + move.accuracy, 0) / moves.length : null,
     inaccuracies: count("inaccuracy"),
     mistakes: count("mistake"),
     blunders: count("blunder")

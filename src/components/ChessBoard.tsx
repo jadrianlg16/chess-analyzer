@@ -150,9 +150,7 @@ export function ChessBoard({
                   </span>
                 ) : null}
                 {file === orderedFiles[0] ? <span className="rank-label">{rank}</span> : null}
-                {rank === orderedRanks[orderedRanks.length - 1] ? (
-                  <span className="file-label">{file}</span>
-                ) : null}
+                {rank === orderedRanks[orderedRanks.length - 1] ? <span className="file-label">{file}</span> : null}
               </button>
             );
           })

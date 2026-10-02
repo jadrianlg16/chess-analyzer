@@ -39,7 +39,10 @@ describe("checkBoardMove", () => {
 
 describe("gameStatusOf", () => {
   it("announces checkmate, stalemate, draws and check", () => {
-    expect(gameStatusOf("1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 17")).toEqual({ type: "checkmate", winner: "w" });
+    expect(gameStatusOf("1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 17")).toEqual({
+      type: "checkmate",
+      winner: "w"
+    });
     expect(gameStatusOf("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1")).toEqual({ type: "stalemate" });
     expect(gameStatusOf("8/8/4k3/8/8/4K3/8/8 w - - 0 1")).toEqual({ type: "draw", reason: "Insufficient material" });
     expect(gameStatusOf("4k3/8/8/8/8/8/8/R3K3 w - - 100 80")).toEqual({ type: "draw", reason: "Fifty-move rule" });
@@ -59,7 +62,11 @@ describe("previewVariation", () => {
   });
 
   it("shows the source position at ply 0 and gives up on a broken line", () => {
-    expect(previewVariation({ ...variation, ply: 0 })).toMatchObject({ fen: START_FEN, lastMove: null, playedSans: [] });
+    expect(previewVariation({ ...variation, ply: 0 })).toMatchObject({
+      fen: START_FEN,
+      lastMove: null,
+      playedSans: []
+    });
     expect(previewVariation({ ...variation, uciMoves: ["e2e5"], ply: 1 })).toBeNull();
   });
 });
