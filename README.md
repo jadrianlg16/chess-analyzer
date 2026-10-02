@@ -149,7 +149,7 @@ npm run typecheck     # tsc for the app, the tests and the Vite config
 
 The suites cover the UCI parser and engine controller (serialized searches, superseded searches, crash and hang recovery, search timeouts, stop, dispose), the live analysis client (stale updates, crash reporting), the review pipeline against the fake Stockfish (second look, cancellation), the grading math (winning chances, accuracy, mate rules), FEN validation and round trips against valid and invalid fixture FENs, the move tree (variations, promotion, deletion, PGN import and export), the board helpers, and the logic behind the review and move-grading hooks (in `src/lib/reviewTree.ts`, run against the fake Stockfish). Nothing touches the network or needs a browser. There are no browser or component tests yet; the UI is checked by hand.
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm ci`, lint, format check, type check, tests and build on Node 20 and 22 for pushes to `main` and for pull requests, then checks that the build left no tracked file modified. The workflow is committed but has not run on GitHub yet.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm ci`, lint, format check, type check, tests and build on Node 20 and 22 for pushes to `main` and for pull requests, then checks that the build left no tracked file modified.
 
 ## Configuration
 
