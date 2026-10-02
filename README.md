@@ -108,7 +108,7 @@ Dockerfile, nginx.conf       Static build served by nginx
 
 ## Getting started
 
-**Prerequisites:** Node.js 20 or newer with npm (tested with Node 20.10 and 22.22). Docker is optional.
+**Prerequisites:** Node.js 20.19+, 22.13+ or 24+ with npm, as set in `engines` in `package.json` (ESLint's dependencies need it). Tested with Node 20.20 and 22.22. Docker is optional.
 
 ```bash
 git clone https://github.com/jadrianlg16/chess-analyzer.git && cd chess-analyzer
