@@ -54,6 +54,25 @@ describe("reviewGame", () => {
     expect(result.review.white.blunders).toBe(1);
   });
 
+  it("cuts a stalled search short and uses its partial lines", async () => {
+    // These searches never finish on their own, only at the timeout.
+    const fake = fakeFactory(() => ({ scoreFor: () => 30, autoFinish: false }));
+
+    const result = await reviewGame(moves, root, 1000, { createWorker: fake.create, searchTimeoutMs: 20 });
+
+    expect(result.evals.size).toBe(3);
+    expect(Object.keys(result.review.moves)).toHaveLength(2);
+    expect(fake.workers[0].violations).toEqual([]);
+  });
+
+  it("refuses an invalid starting position without starting the engine", async () => {
+    const fake = fakeFactory();
+    await expect(reviewGame([], "4k3/8/8/8/8/8/8/4K3 w K - 0 1", 1000, { createWorker: fake.create })).rejects.toThrow(
+      /starting position is invalid/
+    );
+    expect(fake.workers).toHaveLength(0);
+  });
+
   it("stops early when cancelled and reports it", async () => {
     const fake = fakeFactory(() => ({}));
     let checks = 0;

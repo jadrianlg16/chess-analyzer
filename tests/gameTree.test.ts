@@ -120,6 +120,12 @@ describe("PGN", () => {
     expect(mainlineSan(tree)).toEqual(["e4", "Kd7"]);
   });
 
+  it("rejects a starting position the setup panel would reject", () => {
+    // chess.js accepts this FEN, but Stockfish hangs on the castling right.
+    const pgn = `[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/4K3 w K - 0 1"]\n\n1. Kd2 *`;
+    expect(() => treeFromPgn(pgn)).toThrow(/starting position is invalid: White can't castle kingside/);
+  });
+
   it("throws on movetext that isn't legal", () => {
     expect(() => treeFromPgn("1. e5 e4")).toThrow();
   });

@@ -1,5 +1,5 @@
 import { Chess, DEFAULT_POSITION, type Square } from "chess.js";
-import { START_FEN } from "./position";
+import { START_FEN, validatePositionFen } from "./position";
 
 /**
  * A single half-move (ply) in the game tree. Every node stores the FEN of the
@@ -235,7 +235,8 @@ export function promoteToMainline(tree: GameTree, id: string): GameTree {
 
 /**
  * Build a tree from a PGN string. Loads the main line; if the PGN starts from a
- * custom position (FEN/SetUp headers) that becomes the root.
+ * custom position (FEN/SetUp headers) that becomes the root, after the same
+ * validation as a FEN typed into the setup panel.
  */
 export function treeFromPgn(pgn: string): { tree: GameTree; endAtTip: boolean } {
   const chess = new Chess();
@@ -243,6 +244,8 @@ export function treeFromPgn(pgn: string): { tree: GameTree; endAtTip: boolean } 
 
   const header = chess.header();
   const rootFen = header.FEN && header.SetUp === "1" ? header.FEN : header.FEN ?? DEFAULT_POSITION;
+  const root = validatePositionFen(rootFen);
+  if (!root.ok) throw new Error(`The PGN's starting position is invalid: ${root.error}`);
 
   const verbose = chess.history({ verbose: true });
   let tree = createTree(rootFen);

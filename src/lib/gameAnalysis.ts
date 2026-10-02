@@ -1,5 +1,6 @@
 import { createEngineWorker } from "./analysis";
 import { UciEngine, type SearchLimits, type WorkerLike } from "./engine";
+import { validatePositionFen } from "./position";
 import { buildReview, isError, type GameReview, type PositionEval, type ReviewedMove } from "./review";
 
 export type ReviewPreset = "quick" | "standard" | "deep";
@@ -17,10 +18,18 @@ export const REVIEW_PRESETS: Record<ReviewPreset, { label: string; nodes: number
   deep: { label: "Deep", nodes: 1_000_000 }
 };
 
+/**
+ * Upper bound for one review search. The node budgets take about a second on
+ * a desktop, so this only matters if the engine stalls; the search is then
+ * cut short and its partial result used.
+ */
+const REVIEW_SEARCH_TIMEOUT_MS = 60_000;
+
 export type ReviewOptions = {
   onProgress?: (done: number, total: number) => void;
   isCancelled?: () => boolean;
   createWorker?: () => WorkerLike;
+  searchTimeoutMs?: number;
 };
 
 export type ReviewResult = {
@@ -43,6 +52,10 @@ export async function reviewGame(
   nodes: number,
   options: ReviewOptions = {}
 ): Promise<ReviewResult> {
+  const root = validatePositionFen(rootFen);
+  // The panel shows "Game review failed: <message>.", so no trailing period here.
+  if (!root.ok) throw new Error(`the starting position is invalid (${root.error?.replace(/\.$/, "")})`);
+
   const engine = new UciEngine({ createWorker: options.createWorker ?? createEngineWorker });
   const fens = Array.from(new Set([rootFen, ...moves.map((move) => move.fen)]));
   const evals = new Map<string, PositionEval>();
@@ -52,7 +65,12 @@ export async function reviewGame(
   let cancelled = false;
 
   const evaluate = async (fen: string, limits: SearchLimits): Promise<PositionEval | null> => {
-    const result = await engine.search({ fen, multipv: 1, limits });
+    const result = await engine.search({
+      fen,
+      multipv: 1,
+      limits,
+      timeoutMs: options.searchTimeoutMs ?? REVIEW_SEARCH_TIMEOUT_MS
+    });
     done += 1;
     options.onProgress?.(done, total);
     const top = result.lines[0];
