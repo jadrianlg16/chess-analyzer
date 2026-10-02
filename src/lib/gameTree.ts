@@ -79,14 +79,6 @@ export function currentNode(tree: GameTree): MoveNode | null {
   return tree.currentId ? tree.nodes[tree.currentId] ?? null : null;
 }
 
-/** FEN of the position *before* the current node's move (its parent). */
-function fenBefore(tree: GameTree, id: string | null): string {
-  if (!id) return tree.rootFen;
-  const node = tree.nodes[id];
-  if (!node) return tree.rootFen;
-  return node.parentId ? tree.nodes[node.parentId]?.fen ?? tree.rootFen : tree.rootFen;
-}
-
 /**
  * Play a move from the current position. If the move already exists as a child
  * of the current node we simply navigate into it (no duplicate branch);

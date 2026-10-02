@@ -8,8 +8,9 @@
     "predev": "npm run copy:stockfish",
     "prebuild": "npm run copy:stockfish",
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && tsc -p tsconfig.node.json",
     "test": "vitest run"
   },
   "dependencies": {

@@ -1,0 +1,9 @@
+{
+  // Tests run on Node, so they may use ES2022 APIs such as Array.prototype.at.
+  // The app itself stays on the ES2020 library in tsconfig.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"]
+  },
+  "include": ["src", "tests"]
+}
